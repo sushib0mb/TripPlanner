@@ -1,0 +1,4 @@
+feedback from first full run (tokyo, 2026-11-17)
+
+- user prompts have too much weight: "ramen" in interests turned almost every meal into ramen
+- day ends too early
