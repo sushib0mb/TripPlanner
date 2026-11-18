@@ -28,6 +28,8 @@ export interface Place {
     lon: number;
     kind: string;
     openingHours?: string;
+    // neighbourhood and city from the address, e.g. "Fenway-Kenmore, Boston", so the agent can group by name
+    area?: string;
     source: "nominatim" | "overpass";
 }
 
@@ -41,11 +43,16 @@ export interface LocalCosts {
     parking_per_stop: number;
 }
 
+export type Meal = "lunch" | "dinner";
+
 export interface DraftStop {
     place_id: string;
     start_after?: string;
     duration_min: number;
     cost_per_person: number;
+    meal?: Meal;
+    // english name or romanization from the agent when the map data only has the local script
+    name_en?: string;
     note?: string;
 }
 
@@ -64,6 +71,25 @@ export interface Draft {
 export type LegMode = "walk" | "transit" | "drive" | "taxi";
 export type DataSource = "timetable" | "routed" | "estimate";
 
+// one ride or walk inside a transit leg, as transitous returns it
+export interface Segment {
+    mode: string;
+    line?: string;
+    short?: string;
+    color?: string;
+    textColor?: string;
+    agency?: string;
+    headsign?: string;
+    from: string;
+    to: string;
+    fromPos: [number, number];
+    toPos: [number, number];
+    departMin: number;
+    arriveMin: number;
+    stops: number;
+    geometry: [number, number][];
+}
+
 export interface Leg {
     fromId: string;
     toId: string;
@@ -77,6 +103,7 @@ export interface Leg {
     timeSource: DataSource;
     lines: string[];
     geometry: [number, number][];
+    segments?: Segment[];
     note?: string;
 }
 
@@ -88,6 +115,7 @@ export interface TimedStop {
     endMin: number;
     cost: number;
     hours: "open" | "closed" | "unknown";
+    meal?: Meal;
     note?: string;
 }
 

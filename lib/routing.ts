@@ -1,6 +1,10 @@
 import { cachedJson } from "./http";
+import type { Segment } from "./types";
 
 type LatLon = { lat: number; lon: number };
+
+// segment times stay in utc here, the checker turns them into local minutes
+export type RawSegment = Omit<Segment, "departMin" | "arriveMin"> & { departUtc: number; arriveUtc: number };
 
 export interface RouteResult {
     minutes: number;
@@ -13,6 +17,7 @@ export interface TransitResult extends RouteResult {
     arriveUtc: number;
     lines: string[];
     vehicleLegs: number;
+    segments: RawSegment[];
 }
 
 const OSRM: Record<"foot" | "car", string> = {
@@ -34,16 +39,36 @@ export async function osrmRoute(profile: "foot" | "car", a: LatLon, b: LatLon): 
     };
 }
 
+interface MotisPlace {
+    name: string;
+    lat: number;
+    lon: number;
+}
+
 interface MotisLeg {
     mode: string;
     startTime: string;
     endTime: string;
     distance?: number;
+    from: MotisPlace;
+    to: MotisPlace;
     routeShortName?: string;
+    routeLongName?: string;
+    routeColor?: string;
+    routeTextColor?: string;
+    agencyName?: string;
+    headsign?: string;
     tripShortName?: string;
     displayName?: string;
+    intermediateStops?: MotisPlace[];
     legGeometry?: { points: string; precision: number };
 }
+
+// fullwidth digits and letters in feed text, e.g. bus 上２６ becomes 上26
+const nfkc = (s?: string) => s?.normalize("NFKC");
+
+// gtfs colors come as bare hex and are often blank
+const hex = (c?: string) => (c && /^[0-9a-f]{6}$/i.test(c) ? `#${c}` : undefined);
 
 interface MotisPlan {
     itineraries?: { startTime: string; endTime: string; transfers: number; legs: MotisLeg[] }[];
@@ -57,6 +82,8 @@ export async function transitRoute(a: LatLon, b: LatLon, departUtc: number): Pro
         toPlace: `${r5(b.lat)},${r5(b.lon)}`,
         time: new Date(rounded).toISOString(),
         numItineraries: "1",
+        // feeds with translations then return english line, stop and direction names
+        language: "en",
     });
     const data = await cachedJson<MotisPlan>("https://api.transitous.org/api/v6/plan?" + params, { gapMs: 1200, timeoutMs: 60000 });
     const it = data.itineraries?.[0];
@@ -64,10 +91,32 @@ export async function transitRoute(a: LatLon, b: LatLon, departUtc: number): Pro
     const vehicle = it.legs.filter((l) => !["WALK", "BIKE", "CAR"].includes(l.mode));
     if (vehicle.length === 0) return null;
     const geometry: [number, number][] = [];
+    const segments: RawSegment[] = [];
     let km = 0;
     for (const leg of it.legs) {
-        if (leg.legGeometry) geometry.push(...decodePolyline(leg.legGeometry.points, leg.legGeometry.precision));
-        km += (leg.distance ?? 0) / 1000;
+        const walk = ["WALK", "BIKE", "CAR"].includes(leg.mode);
+        const raw = leg.legGeometry ? decodePolyline(leg.legGeometry.points, leg.legGeometry.precision) : [];
+        const path = walk ? raw : followStops(raw, [leg.from, ...(leg.intermediateStops ?? []), leg.to]);
+        geometry.push(...path);
+        // transitous only gives distances for walks, so measure rides along their path
+        km += leg.distance !== undefined ? leg.distance / 1000 : pathKm(path);
+        segments.push({
+            mode: leg.mode.toLowerCase(),
+            line: walk ? undefined : nfkc(leg.routeLongName || leg.routeShortName || leg.displayName),
+            short: walk ? undefined : nfkc(leg.routeShortName || leg.displayName),
+            color: walk ? undefined : hex(leg.routeColor),
+            textColor: walk ? undefined : hex(leg.routeTextColor),
+            agency: leg.agencyName,
+            headsign: nfkc(leg.headsign),
+            from: nfkc(leg.from.name)!,
+            to: nfkc(leg.to.name)!,
+            fromPos: [leg.from.lat, leg.from.lon],
+            toPos: [leg.to.lat, leg.to.lon],
+            departUtc: Date.parse(leg.startTime),
+            arriveUtc: Date.parse(leg.endTime),
+            stops: leg.intermediateStops?.length ?? 0,
+            geometry: path,
+        });
     }
     const arriveUtc = Date.parse(it.endTime);
     return {
@@ -76,9 +125,56 @@ export async function transitRoute(a: LatLon, b: LatLon, departUtc: number): Pro
         minutes: (arriveUtc - departUtc) / 60000,
         km,
         geometry,
-        lines: vehicle.map((l) => `${l.mode.toLowerCase()} ${l.routeShortName || l.tripShortName || l.displayName || ""}`.trim()),
+        lines: vehicle.map((l) => nfkc(`${l.mode.toLowerCase()} ${l.routeShortName || l.tripShortName || l.displayName || ""}`.trim())!),
         vehicleLegs: vehicle.length,
+        segments,
     };
+}
+
+// rough km, plenty for matching points a few hundred metres apart
+const flatKm = (p: [number, number], q: LatLon) => Math.hypot(p[0] - q.lat, (p[1] - q.lon) * Math.cos((q.lat * Math.PI) / 180)) * 111;
+
+const pathKm = (p: [number, number][]) => p.slice(1).reduce((a, q, i) => a + flatKm(q, { lat: p[i][0], lon: p[i][1] }), 0);
+
+// some feeds give a ride a broken shape, e.g. paris metro 6 bir-hakeim to etoile came back as a 25 km loop
+// round the city, metro 5 from gare de l'est first doubled back to gare du nord, and jr kanda to akihabara
+// ran 750 m past akihabara and back. the ride's own stop list is reliable, so walk the shape stop by stop,
+// keeping the stretch from the last pass of each stop to the first pass of the next
+export function followStops(path: [number, number][], stops: LatLon[], nearKm = 0.3): [number, number][] {
+    const straight = stops.map((s) => [s.lat, s.lon] as [number, number]);
+    if (path.length < 2 || stops.length < 2) return path.length >= 2 ? path : straight;
+    const d = (i: number, s: LatLon) => flatKm(path[i], s);
+    // first point from lo on that comes near s, slid to the nearest point of that pass, else the closest point
+    const firstPass = (s: LatLon, lo: number) => {
+        let i = lo;
+        while (i < path.length && d(i, s) > nearKm) i++;
+        if (i === path.length) {
+            let best = lo;
+            for (let j = lo; j < path.length; j++) if (d(j, s) < d(best, s)) best = j;
+            return best;
+        }
+        while (i + 1 < path.length && d(i + 1, s) < d(i, s)) i++;
+        return i;
+    };
+    // last point between lo and hi that comes near s, slid back to the nearest point of that pass
+    const lastPass = (s: LatLon, lo: number, hi: number) => {
+        let i = hi;
+        while (i > lo && d(i, s) > nearKm) i--;
+        if (d(i, s) > nearKm) return lo;
+        while (i > lo && d(i - 1, s) < d(i, s)) i--;
+        return i;
+    };
+    const out: [number, number][] = [];
+    let prev = 0;
+    for (let k = 1; k < stops.length && prev < path.length - 1; k++) {
+        const end = firstPass(stops[k], prev + 1);
+        const start = lastPass(stops[k - 1], prev, end - 1);
+        out.push(...path.slice(out.length ? start + 1 : start, end + 1));
+        prev = end;
+    }
+    // if the shape still wanders far beyond the stop to stop distance, straight lines between stops are safer
+    const viaStops = pathKm(straight);
+    return out.length >= 2 && pathKm(out) <= viaStops * 1.6 + 0.5 ? out : straight;
 }
 
 export function decodePolyline(str: string, precision = 5): [number, number][] {

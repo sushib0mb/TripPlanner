@@ -43,3 +43,6 @@ next-env.d.ts
 # api response cache
 /.cache
 !.env.local.example
+
+# copied from node_modules on install
+/public/maplibre-gl-worker.mjs

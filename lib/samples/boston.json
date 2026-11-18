@@ -1,0 +1,1296 @@
+{
+    "name": "boston",
+    "intake": {
+        "destination": "Boston",
+        "startDate": "2027-01-15",
+        "nights": 3,
+        "arrivalAirport": "Logan",
+        "arrivalTime": "08:30",
+        "departureAirport": "Logan",
+        "departureTime": "23:36",
+        "hotel": "Back Bay",
+        "adults": 2,
+        "kids": 0,
+        "budget": 600,
+        "currency": "USD",
+        "getAround": "transit",
+        "maxWalkMin": 30,
+        "carDailyRate": 60,
+        "pace": "packed",
+        "interests": "museums, shopping, food"
+    },
+    "draft": {
+        "hotel_place_id": "r4033663",
+        "local_costs": {
+            "transit_fare": 2.4,
+            "taxi_base": 3,
+            "taxi_per_km": 1.8,
+            "fuel_per_km": 0.12,
+            "parking_per_stop": 20
+        },
+        "days": [
+            {
+                "date": "2027-01-15",
+                "stops": [
+                    {
+                        "place_id": "w23787885",
+                        "duration_min": 40,
+                        "cost_per_person": 0,
+                        "note": "Winter stroll through the Public Garden"
+                    },
+                    {
+                        "place_id": "w814701583",
+                        "duration_min": 75,
+                        "cost_per_person": 15,
+                        "note": "Black history on Beacon Hill"
+                    },
+                    {
+                        "place_id": "n7619126126",
+                        "duration_min": 45,
+                        "cost_per_person": 12,
+                        "meal": "lunch",
+                        "note": "Pizza slice lunch"
+                    },
+                    {
+                        "place_id": "w579642751",
+                        "duration_min": 120,
+                        "cost_per_person": 0,
+                        "note": "Newbury Street boutiques"
+                    },
+                    {
+                        "place_id": "r63938",
+                        "duration_min": 180,
+                        "cost_per_person": 27,
+                        "note": "Museum of Fine Arts, open late on Fridays"
+                    },
+                    {
+                        "place_id": "n2458375056",
+                        "start_after": "19:30",
+                        "duration_min": 75,
+                        "cost_per_person": 25,
+                        "meal": "dinner",
+                        "note": "Casual American dinner near Fenway"
+                    }
+                ]
+            },
+            {
+                "date": "2027-01-16",
+                "stops": [
+                    {
+                        "place_id": "w29650851",
+                        "start_after": "11:00",
+                        "duration_min": 120,
+                        "cost_per_person": 22,
+                        "note": "Isabella Stewart Gardner Museum"
+                    },
+                    {
+                        "place_id": "n7711828640",
+                        "duration_min": 45,
+                        "cost_per_person": 12,
+                        "meal": "lunch",
+                        "note": "Mediterranean bowls"
+                    },
+                    {
+                        "place_id": "r21282658",
+                        "duration_min": 150,
+                        "cost_per_person": 32,
+                        "note": "Museum of Science"
+                    },
+                    {
+                        "place_id": "w29551702",
+                        "duration_min": 60,
+                        "cost_per_person": 0,
+                        "note": "Faneuil Hall shops"
+                    },
+                    {
+                        "place_id": "n9265222935",
+                        "start_after": "19:30",
+                        "duration_min": 90,
+                        "cost_per_person": 25,
+                        "meal": "dinner",
+                        "note": "Chinatown Cantonese seafood"
+                    }
+                ]
+            },
+            {
+                "date": "2027-01-17",
+                "stops": [
+                    {
+                        "place_id": "w240376785",
+                        "start_after": "10:00",
+                        "duration_min": 45,
+                        "cost_per_person": 6,
+                        "note": "Paul Revere House"
+                    },
+                    {
+                        "place_id": "w166151194",
+                        "duration_min": 75,
+                        "cost_per_person": 0,
+                        "note": "USS Constitution, free"
+                    },
+                    {
+                        "place_id": "w173838926",
+                        "duration_min": 45,
+                        "cost_per_person": 0,
+                        "note": "WWII destroyer, free"
+                    },
+                    {
+                        "place_id": "n9265281802",
+                        "duration_min": 45,
+                        "cost_per_person": 12,
+                        "meal": "lunch",
+                        "note": "North End pizza"
+                    },
+                    {
+                        "place_id": "w29608515",
+                        "duration_min": 75,
+                        "cost_per_person": 15,
+                        "note": "Old State House"
+                    },
+                    {
+                        "place_id": "w29573399",
+                        "duration_min": 120,
+                        "cost_per_person": 0,
+                        "note": "Quincy Market food hall and shops"
+                    },
+                    {
+                        "place_id": "n2430572067",
+                        "start_after": "19:15",
+                        "duration_min": 100,
+                        "cost_per_person": 27,
+                        "meal": "dinner",
+                        "note": "North End Italian dinner"
+                    }
+                ]
+            },
+            {
+                "date": "2027-01-18",
+                "stops": [
+                    {
+                        "place_id": "n11014493207",
+                        "start_after": "10:00",
+                        "duration_min": 45,
+                        "cost_per_person": 0,
+                        "note": "MIT's free nautical gallery"
+                    },
+                    {
+                        "place_id": "w806281880",
+                        "duration_min": 90,
+                        "cost_per_person": 0,
+                        "note": "Upper Newbury Street shopping"
+                    },
+                    {
+                        "place_id": "n2350127269",
+                        "duration_min": 45,
+                        "cost_per_person": 12,
+                        "meal": "lunch",
+                        "note": "Japanese teriyaki lunch"
+                    },
+                    {
+                        "place_id": "r1626846",
+                        "duration_min": 120,
+                        "cost_per_person": 0,
+                        "note": "Prudential Center and Copley shopping"
+                    },
+                    {
+                        "place_id": "n9273725903",
+                        "start_after": "17:30",
+                        "duration_min": 90,
+                        "cost_per_person": 28,
+                        "meal": "dinner",
+                        "note": "South End Italian small plates before the airport"
+                    }
+                ]
+            }
+        ],
+        "summary": "Packed, budget-minded Boston winter trip: MFA late on Friday, the Gardner and Science museums, the Freedom Trail and Charlestown Navy Yard, Newbury Street and Prudential shopping, and varied food from Chinatown seafood to North End and South End Italian."
+    },
+    "registry": {
+        "r2315704": {
+            "id": "r2315704",
+            "name": "Boston",
+            "lat": 42.3588336,
+            "lon": -71.0578303,
+            "kind": "boundary=administrative",
+            "source": "nominatim"
+        },
+        "ARR": {
+            "id": "ARR",
+            "name": "Logan International Airport (Logan International Airport)",
+            "lat": 42.367476999999994,
+            "lon": -71.018135,
+            "kind": "aeroway=aerodrome",
+            "source": "nominatim"
+        },
+        "DEP": {
+            "id": "DEP",
+            "name": "Logan International Airport (Logan International Airport)",
+            "lat": 42.367476999999994,
+            "lon": -71.018135,
+            "kind": "aeroway=aerodrome",
+            "source": "nominatim"
+        },
+        "r4033663": {
+            "id": "r4033663",
+            "name": "Back Bay",
+            "lat": 42.3507067,
+            "lon": -71.0797297,
+            "kind": "place=suburb",
+            "source": "nominatim"
+        },
+        "w306320866": {
+            "id": "w306320866",
+            "name": "Back Bay",
+            "lat": 42.8036891,
+            "lon": -70.8748346,
+            "kind": "landuse=residential",
+            "source": "nominatim"
+        },
+        "n367780089": {
+            "id": "n367780089",
+            "name": "Gibson House",
+            "lat": 42.3547395,
+            "lon": -71.0741161,
+            "kind": "tourism=museum",
+            "source": "nominatim"
+        },
+        "w405911780": {
+            "id": "w405911780",
+            "name": "William Hickling Prescott House",
+            "lat": 42.3567135,
+            "lon": -71.0682393,
+            "kind": "tourism=museum",
+            "source": "nominatim"
+        },
+        "n11014493207": {
+            "id": "n11014493207",
+            "name": "Hart Nautical Gallery",
+            "lat": 42.3586169,
+            "lon": -71.0928821,
+            "kind": "tourism=museum",
+            "source": "nominatim"
+        },
+        "n367781411": {
+            "id": "n367781411",
+            "name": "Nichols House Museum",
+            "lat": 42.3585095,
+            "lon": -71.0659941,
+            "kind": "tourism=museum",
+            "source": "nominatim"
+        },
+        "w814701583": {
+            "id": "w814701583",
+            "name": "Museum of African American History",
+            "lat": 42.3599588,
+            "lon": -71.0653814,
+            "kind": "tourism=museum",
+            "openingHours": "Tu-Su 10:00-16:00",
+            "source": "nominatim"
+        },
+        "r63938": {
+            "id": "r63938",
+            "name": "Museum of Fine Arts",
+            "lat": 42.3394573,
+            "lon": -71.093897,
+            "kind": "tourism=museum",
+            "openingHours": "We, Sa-Mo 10:00-17:00; Th-Fr 10:00-22:00",
+            "source": "nominatim"
+        },
+        "n5203948635": {
+            "id": "n5203948635",
+            "name": "Ether Dome",
+            "lat": 42.3634958,
+            "lon": -71.0679004,
+            "kind": "tourism=museum",
+            "source": "nominatim"
+        },
+        "w29806589": {
+            "id": "w29806589",
+            "name": "Otis House Museum",
+            "lat": 42.3615341,
+            "lon": -71.0646095,
+            "kind": "tourism=museum",
+            "openingHours": "Apr 03-Aug 30: Fr-Su 11:00-04:00; Jul 04",
+            "source": "nominatim"
+        },
+        "n4779856587": {
+            "id": "n4779856587",
+            "name": "The West End Museum",
+            "lat": 42.364276,
+            "lon": -71.0637633,
+            "kind": "tourism=museum",
+            "openingHours": "Mo-Tu off; We-Th 10:30-17:00; Fr-Sa 10:30-18:00; Su 13:30-17:00",
+            "source": "nominatim"
+        },
+        "w29608515": {
+            "id": "w29608515",
+            "name": "Old State House",
+            "lat": 42.3587306,
+            "lon": -71.0574681,
+            "kind": "tourism=museum",
+            "openingHours": "Mo-Su 10:00-17:00; Jan 01 off; Nov Th[4] off; Dec 25 off",
+            "source": "nominatim"
+        },
+        "w29650851": {
+            "id": "w29650851",
+            "name": "Isabella Stewart Gardner Museum",
+            "lat": 42.338245,
+            "lon": -71.0991538,
+            "kind": "tourism=museum",
+            "openingHours": "We-Mo",
+            "source": "nominatim"
+        },
+        "w29660099": {
+            "id": "w29660099",
+            "name": "Boston Children's Museum",
+            "lat": 42.3518468,
+            "lon": -71.0496461,
+            "kind": "tourism=museum",
+            "openingHours": "Mo-Su 09:00-16:00; Sa[1] 10:00-16:00",
+            "source": "nominatim"
+        },
+        "w240376785": {
+            "id": "w240376785",
+            "name": "Paul Revere House",
+            "lat": 42.3637378,
+            "lon": -71.0536827,
+            "kind": "tourism=museum",
+            "source": "nominatim"
+        },
+        "n1910738492": {
+            "id": "n1910738492",
+            "name": "Warren Anatomical Museum",
+            "lat": 42.3353572,
+            "lon": -71.1037583,
+            "kind": "tourism=museum",
+            "source": "nominatim"
+        },
+        "w166151194": {
+            "id": "w166151194",
+            "name": "USS Constitution",
+            "lat": 42.3724393,
+            "lon": -71.0565455,
+            "kind": "tourism=museum",
+            "openingHours": "Tu-Su 10:00-17:00",
+            "source": "nominatim"
+        },
+        "w173838926": {
+            "id": "w173838926",
+            "name": "USS Cassin Young",
+            "lat": 42.3722207,
+            "lon": -71.0544834,
+            "kind": "tourism=museum",
+            "openingHours": "Tu-Su 10:00-16:30",
+            "source": "nominatim"
+        },
+        "n367781336": {
+            "id": "n367781336",
+            "name": "Boston Marine Society Museum",
+            "lat": 42.3755245,
+            "lon": -71.0537324,
+            "kind": "tourism=museum",
+            "source": "nominatim"
+        },
+        "w503385551": {
+            "id": "w503385551",
+            "name": "James Blake House",
+            "lat": 42.3196348,
+            "lon": -71.06002,
+            "kind": "tourism=museum",
+            "source": "nominatim"
+        },
+        "w29821531": {
+            "id": "w29821531",
+            "name": "Harvard Art Museums",
+            "lat": 42.3740988,
+            "lon": -71.114113,
+            "kind": "tourism=museum",
+            "source": "nominatim"
+        },
+        "n1816988561": {
+            "id": "n1816988561",
+            "name": "Fogg Museum",
+            "lat": 42.3739274,
+            "lon": -71.1144331,
+            "kind": "tourism=museum",
+            "source": "nominatim"
+        },
+        "n7539230623": {
+            "id": "n7539230623",
+            "name": "City Table",
+            "lat": 42.3490394,
+            "lon": -71.0794633,
+            "kind": "amenity=restaurant",
+            "openingHours": "Mo-Fr 07:00-11:00, Sa,Su 07:00-15:00, Mo-Su 16:30-18:00+",
+            "source": "nominatim"
+        },
+        "n4163271893": {
+            "id": "n4163271893",
+            "name": "Abe & Louie's",
+            "lat": 42.3491548,
+            "lon": -71.0815528,
+            "kind": "amenity=restaurant",
+            "openingHours": "Fr 11:30-23:00; Mo-Th 11:30-22:00; Su 11:00-22:00",
+            "source": "nominatim"
+        },
+        "n7598963537": {
+            "id": "n7598963537",
+            "name": "Life Alive",
+            "lat": 42.3515165,
+            "lon": -71.0728196,
+            "kind": "amenity=restaurant",
+            "openingHours": "Mo-Fr 07:00-21:00; Sa-Su 10:00-21:00",
+            "source": "nominatim"
+        },
+        "n9890769380": {
+            "id": "n9890769380",
+            "name": "Club Café",
+            "lat": 42.3483941,
+            "lon": -71.0723921,
+            "kind": "amenity=restaurant",
+            "source": "nominatim"
+        },
+        "n3866802666": {
+            "id": "n3866802666",
+            "name": "Thornton's Restaurant",
+            "lat": 42.3449757,
+            "lon": -71.0818503,
+            "kind": "amenity=restaurant",
+            "openingHours": "Mo-Fr 07:00-16:00; Sa-Su 08:00-16:00",
+            "source": "nominatim"
+        },
+        "n7863138290": {
+            "id": "n7863138290",
+            "name": "UNI",
+            "lat": 42.3486236,
+            "lon": -71.0886477,
+            "kind": "amenity=restaurant",
+            "openingHours": "Mo-Su 18:00-22:00",
+            "source": "nominatim"
+        },
+        "n2350330758": {
+            "id": "n2350330758",
+            "name": "Café Sauvage",
+            "lat": 42.3505007,
+            "lon": -71.0895305,
+            "kind": "amenity=restaurant",
+            "openingHours": "Tu-Fr 08:00-15:00,We-Th 16:30-21:00,Fr 16:30-22:00,Sa 09:00-16:00,17:00-22:00,Su 09:00-15:00,17:00-22:00",
+            "source": "nominatim"
+        },
+        "n2350127269": {
+            "id": "n2350127269",
+            "name": "Teriyaki House",
+            "lat": 42.3468136,
+            "lon": -71.0886276,
+            "kind": "amenity=restaurant",
+            "openingHours": "Mo-Fr 11:30-24:00, Sa 14:00-02:00, Su 14:00-24:00",
+            "source": "nominatim"
+        },
+        "n13335269070": {
+            "id": "n13335269070",
+            "name": "Bistro du Midi",
+            "lat": 42.3519916,
+            "lon": -71.0694161,
+            "kind": "amenity=restaurant",
+            "openingHours": "Mo-Th 11:30-21:30, Fr 11:30-22:00, Sa 11:00-22:00, Su 11:00-21:30",
+            "source": "nominatim"
+        },
+        "n4704790489": {
+            "id": "n4704790489",
+            "name": "Mike & Patty's",
+            "lat": 42.3485529,
+            "lon": -71.0679338,
+            "kind": "amenity=restaurant",
+            "openingHours": "Mo-Tu 08:00-14:00; We-Fr 07:30-14:00; Sa-Su 07:30-14:30",
+            "source": "nominatim"
+        },
+        "w966829844": {
+            "id": "w966829844",
+            "name": "Ichiban Yakitori Sushi House",
+            "lat": 42.3432665,
+            "lon": -71.0867465,
+            "kind": "amenity=restaurant",
+            "source": "nominatim"
+        },
+        "n10858926718": {
+            "id": "n10858926718",
+            "name": "B&G Oysters",
+            "lat": 42.3439044,
+            "lon": -71.0712752,
+            "kind": "amenity=restaurant",
+            "source": "nominatim"
+        },
+        "n5119438721": {
+            "id": "n5119438721",
+            "name": "P.F. Chang's",
+            "lat": 42.3521152,
+            "lon": -71.0672396,
+            "kind": "amenity=restaurant",
+            "openingHours": "Mo-Su 11:00-22:00",
+            "source": "nominatim"
+        },
+        "n7619126126": {
+            "id": "n7619126126",
+            "name": "Upper Crust Pizzeria",
+            "lat": 42.3566667,
+            "lon": -71.069916,
+            "kind": "amenity=restaurant",
+            "source": "nominatim"
+        },
+        "n12451713401": {
+            "id": "n12451713401",
+            "name": "Bab Al-Yemen",
+            "lat": 42.3485767,
+            "lon": -71.0934727,
+            "kind": "amenity=restaurant",
+            "openingHours": "Mo-Th 14:00-21:00; Fr-Sa 12:00-22:00; Su 12:00-21:00",
+            "source": "nominatim"
+        },
+        "n9273725903": {
+            "id": "n9273725903",
+            "name": "Coppa",
+            "lat": 42.3434253,
+            "lon": -71.0686341,
+            "kind": "amenity=restaurant",
+            "openingHours": "Sa-Su 12:00-16:00 \"Brunch\" || Su 16:00-21:00; Mo-Th 17:00-22:00; Fr-Sa 17:00-22:30 \"Dinner\"",
+            "source": "nominatim"
+        },
+        "n14014851888": {
+            "id": "n14014851888",
+            "name": "Burg & Shaw",
+            "lat": 42.3517446,
+            "lon": -71.0648552,
+            "kind": "amenity=restaurant",
+            "openingHours": "Tu-Th 11:00-22:00; Fr-Sa 11:00-01:00; Su 14:00-22:00",
+            "source": "nominatim"
+        },
+        "n2363711021": {
+            "id": "n2363711021",
+            "name": "Genki Ya",
+            "lat": 42.35123,
+            "lon": -71.0646747,
+            "kind": "amenity=restaurant",
+            "source": "nominatim"
+        },
+        "n10822027378": {
+            "id": "n10822027378",
+            "name": "Maria's Taqueria",
+            "lat": 42.3514106,
+            "lon": -71.0646482,
+            "kind": "amenity=restaurant",
+            "openingHours": "Mo-Su 11:00-01:00",
+            "source": "nominatim"
+        },
+        "n4163308395": {
+            "id": "n4163308395",
+            "name": "JiangNan",
+            "lat": 42.3530092,
+            "lon": -71.064208,
+            "kind": "amenity=restaurant",
+            "source": "nominatim"
+        },
+        "w29573399": {
+            "id": "w29573399",
+            "name": "Quincy Market",
+            "lat": 42.3602076,
+            "lon": -71.0549128,
+            "kind": "amenity=marketplace",
+            "source": "nominatim"
+        },
+        "n10789037893": {
+            "id": "n10789037893",
+            "name": "Quincy Market",
+            "lat": 42.2512294,
+            "lon": -71.0022655,
+            "kind": "shop=convenience",
+            "source": "nominatim"
+        },
+        "r1626846": {
+            "id": "r1626846",
+            "name": "Prudential Center",
+            "lat": 42.3470908,
+            "lon": -71.081655,
+            "kind": "shop=mall",
+            "source": "nominatim"
+        },
+        "r21282658": {
+            "id": "r21282658",
+            "name": "Museum of Science",
+            "lat": 42.3674108,
+            "lon": -71.0711089,
+            "kind": "tourism=museum",
+            "openingHours": "Mo-Su 09:00-17:00",
+            "source": "nominatim"
+        },
+        "w29660091": {
+            "id": "w29660091",
+            "name": "New England Aquarium",
+            "lat": 42.3592003,
+            "lon": -71.0491841,
+            "kind": "tourism=aquarium",
+            "openingHours": "Mo-Fr 09:00-18:00; Sa,Su 09:00-18:00",
+            "source": "nominatim"
+        },
+        "w29661563": {
+            "id": "w29661563",
+            "name": "East Boston Public Library Building",
+            "lat": 42.376547,
+            "lon": -71.0394446,
+            "kind": "historic=building",
+            "source": "nominatim"
+        },
+        "w688996682": {
+            "id": "w688996682",
+            "name": "Newbury Street",
+            "lat": 42.3505265,
+            "lon": -71.0783948,
+            "kind": "landuse=commercial",
+            "source": "nominatim"
+        },
+        "w579642751": {
+            "id": "w579642751",
+            "name": "Newbury Street",
+            "lat": 42.3523684,
+            "lon": -71.0722732,
+            "kind": "highway=secondary",
+            "source": "nominatim"
+        },
+        "w825263833": {
+            "id": "w825263833",
+            "name": "Newbury Street",
+            "lat": 42.3500047,
+            "lon": -71.0810406,
+            "kind": "highway=secondary",
+            "source": "nominatim"
+        },
+        "w825263832": {
+            "id": "w825263832",
+            "name": "Newbury Street",
+            "lat": 42.3506065,
+            "lon": -71.0788158,
+            "kind": "highway=secondary",
+            "source": "nominatim"
+        },
+        "w806281880": {
+            "id": "w806281880",
+            "name": "Newbury Street",
+            "lat": 42.3485013,
+            "lon": -71.0866159,
+            "kind": "highway=secondary",
+            "source": "nominatim"
+        },
+        "n2448023622": {
+            "id": "n2448023622",
+            "name": "Harvard Square",
+            "lat": 42.3734734,
+            "lon": -71.1189431,
+            "kind": "place=square",
+            "source": "nominatim"
+        },
+        "w8650961": {
+            "id": "w8650961",
+            "name": "Harvard Square",
+            "lat": 42.3730297,
+            "lon": -71.0627256,
+            "kind": "highway=residential",
+            "source": "nominatim"
+        },
+        "w8643985": {
+            "id": "w8643985",
+            "name": "Harvard Square",
+            "lat": 42.3726248,
+            "lon": -71.0630287,
+            "kind": "highway=service",
+            "source": "nominatim"
+        },
+        "n1712229694": {
+            "id": "n1712229694",
+            "name": "Gennaro's",
+            "lat": 42.3640061,
+            "lon": -71.0535524,
+            "kind": "amenity=restaurant",
+            "source": "nominatim"
+        },
+        "n4418929895": {
+            "id": "n4418929895",
+            "name": "Limoncello",
+            "lat": 42.3634484,
+            "lon": -71.0538289,
+            "kind": "amenity=restaurant",
+            "openingHours": "Su 11:30-21:30; Mo 11:30-23:00; Tu-Sa 11:30-22:00",
+            "source": "nominatim"
+        },
+        "n11907814269": {
+            "id": "n11907814269",
+            "name": "Isabella's Restaurant Boston",
+            "lat": 42.3640654,
+            "lon": -71.0535788,
+            "kind": "amenity=restaurant",
+            "openingHours": "Mo-Su 11:00-22:30",
+            "source": "nominatim"
+        },
+        "n2430572067": {
+            "id": "n2430572067",
+            "name": "Carmelina's",
+            "lat": 42.3638729,
+            "lon": -71.0541727,
+            "kind": "amenity=restaurant",
+            "source": "nominatim"
+        },
+        "n9418257967": {
+            "id": "n9418257967",
+            "name": "Cafe Amaro",
+            "lat": 42.3640476,
+            "lon": -71.0540381,
+            "kind": "amenity=restaurant",
+            "openingHours": "Su-Th 12:00-22:30; Fr-Sa 12:00-23:00",
+            "source": "nominatim"
+        },
+        "n870648662": {
+            "id": "n870648662",
+            "name": "Quattro",
+            "lat": 42.3636546,
+            "lon": -71.0548061,
+            "kind": "amenity=restaurant",
+            "source": "nominatim"
+        },
+        "n7633075191": {
+            "id": "n7633075191",
+            "name": "Panza",
+            "lat": 42.3646308,
+            "lon": -71.0537834,
+            "kind": "amenity=restaurant",
+            "source": "nominatim"
+        },
+        "n2430572064": {
+            "id": "n2430572064",
+            "name": "Bricco",
+            "lat": 42.3631769,
+            "lon": -71.0548764,
+            "kind": "amenity=restaurant",
+            "source": "nominatim"
+        },
+        "n2430572071": {
+            "id": "n2430572071",
+            "name": "Spagnulos",
+            "lat": 42.3632983,
+            "lon": -71.0551854,
+            "kind": "amenity=restaurant",
+            "source": "nominatim"
+        },
+        "n9265281802": {
+            "id": "n9265281802",
+            "name": "Rina’s Pizzeria & Cafe",
+            "lat": 42.3648818,
+            "lon": -71.0531892,
+            "kind": "amenity=restaurant",
+            "source": "nominatim"
+        },
+        "n6219962092": {
+            "id": "n6219962092",
+            "name": "Parla",
+            "lat": 42.3632331,
+            "lon": -71.0552539,
+            "kind": "amenity=restaurant",
+            "source": "nominatim"
+        },
+        "n11284284403": {
+            "id": "n11284284403",
+            "name": "Piccolo Nido",
+            "lat": 42.3636673,
+            "lon": -71.0519517,
+            "kind": "amenity=restaurant",
+            "source": "nominatim"
+        },
+        "n14133678869": {
+            "id": "n14133678869",
+            "name": "Tacco",
+            "lat": 42.36418,
+            "lon": -71.0554527,
+            "kind": "amenity=restaurant",
+            "source": "nominatim"
+        },
+        "n4111761330": {
+            "id": "n4111761330",
+            "name": "Al Dente",
+            "lat": 42.3642349,
+            "lon": -71.0554623,
+            "kind": "amenity=restaurant",
+            "openingHours": "Su-Th 11:30-22:00; Fr-Sa 11:30-23:00",
+            "source": "nominatim"
+        },
+        "n11284122351": {
+            "id": "n11284122351",
+            "name": "Tenoch Mexican",
+            "lat": 42.3632994,
+            "lon": -71.0518243,
+            "kind": "amenity=restaurant",
+            "openingHours": "Mo-Su 11:00-21:00",
+            "source": "nominatim"
+        },
+        "n6641654952": {
+            "id": "n6641654952",
+            "name": "L' Osteria Ristorante",
+            "lat": 42.3642879,
+            "lon": -71.0556092,
+            "kind": "amenity=restaurant",
+            "source": "nominatim"
+        },
+        "n11278200280": {
+            "id": "n11278200280",
+            "name": "Crudo",
+            "lat": 42.3636638,
+            "lon": -71.0559024,
+            "kind": "amenity=restaurant",
+            "source": "nominatim"
+        },
+        "n6003377985": {
+            "id": "n6003377985",
+            "name": "Rabia‘s",
+            "lat": 42.3634262,
+            "lon": -71.0558899,
+            "kind": "amenity=restaurant",
+            "source": "nominatim"
+        },
+        "w408471959": {
+            "id": "w408471959",
+            "name": "Lo Conte's Restaurant",
+            "lat": 42.3646308,
+            "lon": -71.0556241,
+            "kind": "amenity=restaurant",
+            "source": "nominatim"
+        },
+        "n9806670619": {
+            "id": "n9806670619",
+            "name": "Lucia Ristorante",
+            "lat": 42.3656082,
+            "lon": -71.0527928,
+            "kind": "amenity=restaurant",
+            "openingHours": "Su-Th 11:00-22:30; Fr-Sa 11:00-23:30",
+            "source": "nominatim"
+        },
+        "n4267069467": {
+            "id": "n4267069467",
+            "name": "Russell House Tavern",
+            "lat": 42.3731448,
+            "lon": -71.1195115,
+            "kind": "amenity=restaurant",
+            "source": "nominatim"
+        },
+        "n7110645318": {
+            "id": "n7110645318",
+            "name": "Whole Heart Provisions",
+            "lat": 42.3727832,
+            "lon": -71.118741,
+            "kind": "amenity=restaurant",
+            "source": "nominatim"
+        },
+        "n6124473594": {
+            "id": "n6124473594",
+            "name": "El Jefe's Taqueria",
+            "lat": 42.3732683,
+            "lon": -71.1199556,
+            "kind": "amenity=restaurant",
+            "openingHours": "Mo-Su 08:00-04:00",
+            "source": "nominatim"
+        },
+        "n7110645317": {
+            "id": "n7110645317",
+            "name": "Bon Me",
+            "lat": 42.3727178,
+            "lon": -71.118513,
+            "kind": "amenity=restaurant",
+            "openingHours": "Mo-Fr 10:30-20:00; Sa-Su 11:00-20:00",
+            "source": "nominatim"
+        },
+        "n14051943186": {
+            "id": "n14051943186",
+            "name": "Lou's",
+            "lat": 42.3734625,
+            "lon": -71.1202301,
+            "kind": "amenity=restaurant",
+            "source": "nominatim"
+        },
+        "w29826025": {
+            "id": "w29826025",
+            "name": "The Smoke Shop",
+            "lat": 42.3726895,
+            "lon": -71.1179528,
+            "kind": "amenity=restaurant",
+            "openingHours": "Mo-Th 11:30-21:00, Fr-Sa 11:30-22:00, Su 11:30-20:00",
+            "source": "nominatim"
+        },
+        "n4826277222": {
+            "id": "n4826277222",
+            "name": "Felipe's",
+            "lat": 42.3734706,
+            "lon": -71.120511,
+            "kind": "amenity=restaurant",
+            "openingHours": "Su-We 11:00-24:00; Th-Sa 11:00-02:00",
+            "source": "nominatim"
+        },
+        "n13007797307": {
+            "id": "n13007797307",
+            "name": "The Painted Burro",
+            "lat": 42.374301,
+            "lon": -71.1202484,
+            "kind": "amenity=restaurant",
+            "openingHours": "Mo-Th 16:00-22:00; Fr 11:30-23:00; Sa 10:00-23:00; Su 10:00-22:00",
+            "source": "nominatim"
+        },
+        "n12752572579": {
+            "id": "n12752572579",
+            "name": "Source",
+            "lat": 42.374526,
+            "lon": -71.1200301,
+            "kind": "amenity=restaurant",
+            "openingHours": "Mo-Th 12:00-22:00; Fr 12:00-23:00; Sa 11:00-23:00; Su 11:00-22:00",
+            "source": "nominatim"
+        },
+        "n3658341425": {
+            "id": "n3658341425",
+            "name": "Bosso Ramen Tavern",
+            "lat": 42.372168,
+            "lon": -71.118338,
+            "kind": "amenity=restaurant",
+            "source": "nominatim"
+        },
+        "n13903772544": {
+            "id": "n13903772544",
+            "name": "Waku Waku Ramen",
+            "lat": 42.3735608,
+            "lon": -71.1209134,
+            "kind": "amenity=restaurant",
+            "openingHours": "Mo-Th 11:30-21:30; Fr-Su 11:30-22:30",
+            "source": "nominatim"
+        },
+        "n6080902481": {
+            "id": "n6080902481",
+            "name": "Pinocchio's Pizza and Subs",
+            "lat": 42.3720032,
+            "lon": -71.1202684,
+            "kind": "amenity=restaurant",
+            "openingHours": "Mo-Th 11:00-01:00, Fr,Sa 11:00-02:00, Su 12:00-24:00",
+            "source": "nominatim"
+        },
+        "n4731133947": {
+            "id": "n4731133947",
+            "name": "Alden & Harlow",
+            "lat": 42.3735585,
+            "lon": -71.1213903,
+            "kind": "amenity=restaurant",
+            "source": "nominatim"
+        },
+        "n7100285262": {
+            "id": "n7100285262",
+            "name": "Nine Tastes",
+            "lat": 42.3720202,
+            "lon": -71.1204502,
+            "kind": "amenity=restaurant",
+            "openingHours": "Mo-Th 11:30-22:00; Fr 11:30-22:30; Sa 12:00-22:30; Su 12:00-22:00",
+            "source": "nominatim"
+        },
+        "n13946717785": {
+            "id": "n13946717785",
+            "name": "Bonchon Cambridge",
+            "lat": 42.3720472,
+            "lon": -71.1208691,
+            "kind": "amenity=restaurant",
+            "openingHours": "Su-Th 11:00-21:00; Fr-Sa 11:00-22:00",
+            "source": "nominatim"
+        },
+        "n7100193732": {
+            "id": "n7100193732",
+            "name": "Falafel Corner",
+            "lat": 42.3725199,
+            "lon": -71.1215377,
+            "kind": "amenity=restaurant",
+            "source": "nominatim"
+        },
+        "n4267134584": {
+            "id": "n4267134584",
+            "name": "Harvest",
+            "lat": 42.3737684,
+            "lon": -71.1218285,
+            "kind": "amenity=restaurant",
+            "source": "nominatim"
+        },
+        "n2590730353": {
+            "id": "n2590730353",
+            "name": "Grafton Street Pub & Grill",
+            "lat": 42.3718723,
+            "lon": -71.1208925,
+            "kind": "amenity=restaurant",
+            "source": "nominatim"
+        },
+        "n4267292053": {
+            "id": "n4267292053",
+            "name": "Charlie's Kitchen",
+            "lat": 42.3724072,
+            "lon": -71.1215195,
+            "kind": "amenity=restaurant",
+            "openingHours": "Su-We 11:00-01:00; Th-Sa 11:00-02:00",
+            "source": "nominatim"
+        },
+        "n13414994060": {
+            "id": "n13414994060",
+            "name": "Too Hot",
+            "lat": 42.3720711,
+            "lon": -71.1214457,
+            "kind": "amenity=restaurant",
+            "openingHours": "Mo-Th 12:00-15:00,17:00-21:00; Fr-Su 12:00-15:00,17:00-22:00",
+            "source": "nominatim"
+        },
+        "n3663721999": {
+            "id": "n3663721999",
+            "name": "University Pizza",
+            "lat": 42.338571,
+            "lon": -71.092916,
+            "kind": "amenity=restaurant",
+            "openingHours": "Mo-Sa 10:30-01:00, Su 11:00-22:00",
+            "source": "nominatim"
+        },
+        "n12962304688": {
+            "id": "n12962304688",
+            "name": "Anna's Taqueria",
+            "lat": 42.3401095,
+            "lon": -71.0902194,
+            "kind": "amenity=restaurant",
+            "source": "nominatim"
+        },
+        "n1914787995": {
+            "id": "n1914787995",
+            "name": "Boston House of Pizza",
+            "lat": 42.3411552,
+            "lon": -71.0873096,
+            "kind": "amenity=restaurant",
+            "source": "nominatim"
+        },
+        "n11793858559": {
+            "id": "n11793858559",
+            "name": "Sushi Kappo",
+            "lat": 42.3431499,
+            "lon": -71.0989337,
+            "kind": "amenity=restaurant",
+            "openingHours": "Mo-Th 11:00-14:00, 15:00-21:00; Fr-Su 11:00-21:00",
+            "source": "nominatim"
+        },
+        "w237981198": {
+            "id": "w237981198",
+            "name": "Restaurant Row",
+            "lat": 42.3430651,
+            "lon": -71.0991158,
+            "kind": "amenity=restaurant",
+            "source": "nominatim"
+        },
+        "n2458375056": {
+            "id": "n2458375056",
+            "name": "Thornton's",
+            "lat": 42.3430238,
+            "lon": -71.0993993,
+            "kind": "amenity=restaurant",
+            "openingHours": "Mo-Th 11:00-21:00; Fr 11:00-22:00; Sa 10:00-22:00; Su 10:00-21:00",
+            "source": "nominatim"
+        },
+        "n7711828650": {
+            "id": "n7711828650",
+            "name": "Blaze Pizza",
+            "lat": 42.3444241,
+            "lon": -71.0974206,
+            "kind": "amenity=restaurant",
+            "openingHours": "Mo-Su 11:00-22:00",
+            "source": "nominatim"
+        },
+        "n7711828645": {
+            "id": "n7711828645",
+            "name": "Citizen Public House & Oyster Bar",
+            "lat": 42.3442902,
+            "lon": -71.0979167,
+            "kind": "amenity=restaurant",
+            "source": "nominatim"
+        },
+        "n7711828644": {
+            "id": "n7711828644",
+            "name": "Regina Pizzeria",
+            "lat": 42.344243,
+            "lon": -71.0981022,
+            "kind": "amenity=restaurant",
+            "openingHours": "Mo-Th 11:00-20:00; Fr-Sa 11:00-21:00",
+            "source": "nominatim"
+        },
+        "n7711828641": {
+            "id": "n7711828641",
+            "name": "Basho",
+            "lat": 42.3441,
+            "lon": -71.0986476,
+            "kind": "amenity=restaurant",
+            "source": "nominatim"
+        },
+        "n7711828640": {
+            "id": "n7711828640",
+            "name": "CAVA",
+            "lat": 42.3439858,
+            "lon": -71.0992161,
+            "kind": "amenity=restaurant",
+            "openingHours": "Mo-Su 10:45-22:00",
+            "source": "nominatim"
+        },
+        "n7763953743": {
+            "id": "n7763953743",
+            "name": "Eventide FENWAY",
+            "lat": 42.3444645,
+            "lon": -71.0990561,
+            "kind": "amenity=restaurant",
+            "source": "nominatim"
+        },
+        "n1914521961": {
+            "id": "n1914521961",
+            "name": "Bangkok Pinto",
+            "lat": 42.3365682,
+            "lon": -71.085623,
+            "kind": "amenity=restaurant",
+            "openingHours": "Tu-Fr 12:00-21:00; Sa 16:00-21:00",
+            "source": "nominatim"
+        },
+        "n1914536842": {
+            "id": "n1914536842",
+            "name": "Ali's Roti",
+            "lat": 42.3366376,
+            "lon": -71.0854956,
+            "kind": "amenity=restaurant",
+            "source": "nominatim"
+        },
+        "n7468777202": {
+            "id": "n7468777202",
+            "name": "Sweet Cheeks Q",
+            "lat": 42.343909,
+            "lon": -71.1011137,
+            "kind": "amenity=restaurant",
+            "source": "nominatim"
+        },
+        "n14105951701": {
+            "id": "n14105951701",
+            "name": "Bartaco",
+            "lat": 42.3447259,
+            "lon": -71.1001699,
+            "kind": "amenity=restaurant",
+            "source": "nominatim"
+        },
+        "n5197357123": {
+            "id": "n5197357123",
+            "name": "Mumbai Spice Indian Restaurant",
+            "lat": 42.3438426,
+            "lon": -71.0863458,
+            "kind": "amenity=restaurant",
+            "openingHours": "Mo-Th 12:00-15:00,16:30-22:00; Fr-Su 12:00-22:30",
+            "source": "nominatim"
+        },
+        "n7603989919": {
+            "id": "n7603989919",
+            "name": "Dell Technologies Club",
+            "lat": 42.3458914,
+            "lon": -71.0981069,
+            "kind": "amenity=restaurant",
+            "source": "nominatim"
+        },
+        "n5197357127": {
+            "id": "n5197357127",
+            "name": "Saigon Fusion",
+            "lat": 42.3450874,
+            "lon": -71.0869785,
+            "kind": "amenity=restaurant",
+            "openingHours": "Mo-Sa 11:30-20:00",
+            "source": "nominatim"
+        },
+        "n11820131360": {
+            "id": "n11820131360",
+            "name": "Courtyard Cafe",
+            "lat": 42.3361891,
+            "lon": -71.1032519,
+            "kind": "amenity=restaurant",
+            "source": "nominatim"
+        },
+        "w29551702": {
+            "id": "w29551702",
+            "name": "Faneuil Hall",
+            "lat": 42.3600335,
+            "lon": -71.0562341,
+            "kind": "building=public",
+            "source": "nominatim"
+        },
+        "w212123982": {
+            "id": "w212123982",
+            "name": "China Trade Gate",
+            "lat": 42.3511889,
+            "lon": -71.0597515,
+            "kind": "building=roof",
+            "source": "nominatim"
+        },
+        "n1399796278": {
+            "id": "n1399796278",
+            "name": "Chinatown Gate",
+            "lat": 42.3504038,
+            "lon": -71.0597395,
+            "kind": "highway=bus_stop",
+            "source": "nominatim"
+        },
+        "w23787885": {
+            "id": "w23787885",
+            "name": "Boston Public Garden",
+            "lat": 42.3540901,
+            "lon": -71.0700402,
+            "kind": "leisure=park",
+            "openingHours": "24/7",
+            "source": "nominatim"
+        },
+        "n9710744652": {
+            "id": "n9710744652",
+            "name": "Salty Dog Seafood Grille & Bar",
+            "lat": 42.3602616,
+            "lon": -71.0554773,
+            "kind": "amenity=restaurant",
+            "openingHours": "Mo-Su 11:30-20:00",
+            "source": "nominatim"
+        },
+        "n2664022948": {
+            "id": "n2664022948",
+            "name": "The Oceanaire Seafood Room",
+            "lat": 42.3590304,
+            "lon": -71.0591935,
+            "kind": "amenity=restaurant",
+            "source": "nominatim"
+        },
+        "n9265222935": {
+            "id": "n9265222935",
+            "name": "Jumbo Seafood",
+            "lat": 42.3508377,
+            "lon": -71.0601272,
+            "kind": "amenity=restaurant",
+            "source": "nominatim"
+        },
+        "n4421257472": {
+            "id": "n4421257472",
+            "name": "Ideal Seafood",
+            "lat": 42.3505452,
+            "lon": -71.0381261,
+            "kind": "amenity=restaurant",
+            "source": "nominatim"
+        },
+        "n5054692121": {
+            "id": "n5054692121",
+            "name": "Gaga Seafood",
+            "lat": 42.350687,
+            "lon": -71.0608747,
+            "kind": "amenity=restaurant",
+            "source": "nominatim"
+        },
+        "w117888922": {
+            "id": "w117888922",
+            "name": "The Institute of Contemporary Art",
+            "lat": 42.3528651,
+            "lon": -71.0429628,
+            "kind": "tourism=museum",
+            "source": "nominatim"
+        }
+    }
+}

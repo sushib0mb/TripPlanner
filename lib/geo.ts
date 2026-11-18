@@ -13,6 +13,29 @@ interface NominatimHit {
     category: string;
     type: string;
     extratags?: Record<string, string> | null;
+    namedetails?: Record<string, string> | null;
+    address?: Record<string, string> | null;
+}
+
+// boston and paris put the useful part in suburb (back bay, 3rd arrondissement), tokyo in quarter (asakusa)
+function areaOf(h: NominatimHit) {
+    const a = h.address ?? {};
+    const local = a.suburb || a.quarter || a.neighbourhood || a.city_district;
+    const city = a.city || a.town || a.village;
+    const parts = [local, city].filter((p, i, all): p is string => !!p && all.indexOf(p) === i);
+    return parts.length ? parts.join(", ") : undefined;
+}
+
+const LATIN = /^[\p{Script=Latin}\p{N}\p{P}\p{S}\s]+$/u;
+
+// accept-language only helps when the place has name:en, so fall back to an
+// international or romanized name before the local script one
+function englishName(h: NominatimHit) {
+    const name = h.name || h.display_name.split(",")[0];
+    if (LATIN.test(name)) return name;
+    const n = h.namedetails ?? {};
+    const romanized = Object.keys(n).find((k) => /^name:[a-z]{2,3}[-_](Latn|rm)$/.test(k));
+    return n["name:en"] || n.int_name || (romanized && n[romanized]) || name;
 }
 
 type LatLon = { lat: number; lon: number };
@@ -20,11 +43,12 @@ type LatLon = { lat: number; lon: number };
 function toPlace(h: NominatimHit): Place {
     return {
         id: h.osm_type[0] + h.osm_id,
-        name: h.name || h.display_name.split(",")[0],
+        name: englishName(h),
         lat: Number(h.lat),
         lon: Number(h.lon),
         kind: `${h.category}=${h.type}`,
         openingHours: h.extratags?.opening_hours,
+        area: areaOf(h),
         source: "nominatim",
     };
 }
@@ -36,7 +60,7 @@ function viewbox(c: LatLon, km: number) {
 }
 
 async function nominatim(params: Record<string, string>): Promise<Place[]> {
-    const q = new URLSearchParams({ format: "jsonv2", extratags: "1", "accept-language": "en", ...params });
+    const q = new URLSearchParams({ format: "jsonv2", extratags: "1", namedetails: "1", addressdetails: "1", "accept-language": "en", ...params });
     const hits = await cachedJson<NominatimHit[]>("https://nominatim.openstreetmap.org/search?" + q);
     return hits.map(toPlace);
 }

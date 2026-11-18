@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
-import { evaluatePlan } from "./checker";
+import { DINNER, evaluatePlan, PACE_DAY } from "./checker";
 import { findAirport, geocode, searchPlaces } from "./geo";
 import { addDays, minToHhmm } from "./time";
 import type { Draft, Evaluation, Intake, Place, Registry, StreamEvent } from "./types";
@@ -12,14 +12,22 @@ const MAX_TURNS = 30;
 // created on first use so the app still loads without a key
 let client: Anthropic | undefined;
 
+// built from the checker's own numbers so the prompt and the checks never disagree
+const paceLines = (Object.keys(PACE_DAY) as (keyof typeof PACE_DAY)[])
+    .map((k) => `${k}: day starts ${minToHhmm(PACE_DAY[k].start)}, back at the hotel between ${minToHhmm(PACE_DAY[k].backFrom)} and ${minToHhmm(PACE_DAY[k].backBy)}`)
+    .join("; ");
+
 const SYSTEM = `You are the planning agent inside a trip planner. You build day-by-day itineraries from real places.
 
 Rules:
 - Every place in a plan must come from a geocode or search_places result. Refer to it by its id. Never invent places or ids.
 - You do not compute travel times, routes or schedules. Submit the plan with submit_plan. The app routes every leg with real walking, driving and public transit timetable data, builds the schedule, checks opening hours, flights and budget, and returns the problems it finds.
 - Fix every error the app reports and submit again. Warnings may stay when there is no better option. Stop when a submission has no errors, or when the app says no more submissions are allowed.
-- Group each day's stops by area to keep travel short. Pace: relaxed 2-3 stops, normal 3-5, packed 5-7 per full day. Arrival and departure days are partial days.
-- Include a lunch stop, and dinner when the day runs into the evening, chosen from food results.
+- Group each day's stops by area to keep travel short; results carry an area name to help. Neighbouring areas can still be a short walk apart, so also act on the app's split_area warnings (nearby sights on different days) and travel_heavy warnings (a day spent mostly travelling) unless opening hours or the traveler's wishes make the split necessary. Pace: relaxed 2-3 stops, normal 3-5, packed 5-7 per full day. Arrival and departure days are partial days.
+- Days run into the evening. By pace: ${paceLines}. The app reports a day that ends too early or too late. On the arrival day the app starts the day once the traveler reaches the hotel.
+- Every day needs a dinner stop, a restaurant from food results marked meal "dinner" and starting ${minToHhmm(DINNER.from)}-${minToHhmm(DINNER.to)} (use start_after). The only exceptions are a departure day where the traveler must leave for the airport before evening and an arrival day landing too late. Mark lunch stops meal "lunch".
+- Mix the traveler's interests with the destination's best-known sights and varied food; do not repeat one cuisine or one kind of place all trip.
+- Write everything for the traveler in English. When a place's name is in another script, set name_en to its common English name or a romanization, for example "Ueno Seiyoken". Notes and the summary are English too.
 - local_costs and cost_per_person are your estimates in the trip currency; the app labels them as estimates. Use 0 for free places.
 - ARR and DEP are the arrival and departure airports when given. The app adds the airport legs itself; never add airports as stops.
 - If no hotel is given, pick a well-connected central place from your results as the base and use its id as hotel_place_id.
@@ -36,6 +44,8 @@ const StopSchema = z.object({
     start_after: z.string().regex(/^\d{2}:\d{2}$/).optional(),
     duration_min: z.number().min(5).max(600),
     cost_per_person: z.number().min(0),
+    meal: z.enum(["lunch", "dinner"]).optional(),
+    name_en: z.string().optional(),
     note: z.string().optional(),
 });
 const DraftSchema = z.object({
@@ -105,7 +115,9 @@ const TOOLS: Anthropic.Beta.BetaTool[] = [
                                         start_after: { type: "string", description: "optional HH:MM, earliest local start" },
                                         duration_min: { type: "number" },
                                         cost_per_person: { type: "number" },
-                                        note: { type: "string" },
+                                        meal: { type: "string", enum: ["lunch", "dinner"], description: "set for meal stops" },
+                                        name_en: { type: "string", description: "English name or romanization when the place name is in another script" },
+                                        note: { type: "string", description: "short note in English" },
                                     },
                                     required: ["place_id", "duration_min", "cost_per_person"],
                                 },
@@ -123,11 +135,12 @@ const TOOLS: Anthropic.Beta.BetaTool[] = [
 ];
 
 function placeLine(p: Place) {
-    return `${p.id} | ${p.name} | ${p.kind} | ${p.lat.toFixed(4)},${p.lon.toFixed(4)}${p.openingHours ? ` | hours: ${p.openingHours}` : ""}`;
+    return `${p.id} | ${p.name} | ${p.kind}${p.area ? ` | area: ${p.area}` : ""} | ${p.lat.toFixed(4)},${p.lon.toFixed(4)}${p.openingHours ? ` | hours: ${p.openingHours}` : ""}`;
 }
 
 export function describeEvaluation(ev: Evaluation, registry: Registry) {
-    const name = (id: string) => registry[id]?.name ?? id;
+    const shown = new Map(ev.days.flatMap((d) => d.stops.map((s) => [s.placeId, s.name] as const)));
+    const name = (id: string) => shown.get(id) ?? registry[id]?.name ?? id;
     const lines: string[] = [];
     const errors = ev.issues.filter((i) => i.level === "error");
     const warnings = ev.issues.filter((i) => i.level === "warning");
@@ -141,7 +154,7 @@ export function describeEvaluation(ev: Evaluation, registry: Registry) {
             lines.push(`  ${minToHhmm(l.departMin)} ${l.mode} ${Math.round(l.minutes)} min ${name(l.fromId)} → ${name(l.toId)}${l.lines.length ? ` (${l.lines.join(", ")})` : ""}`);
         }
         for (const s of d.stops) {
-            lines.push(`  stop ${minToHhmm(s.startMin)}-${minToHhmm(s.endMin)} ${s.name} [hours ${s.hours}]`);
+            lines.push(`  stop ${minToHhmm(s.startMin)}-${minToHhmm(s.endMin)} ${s.name}${s.meal ? ` (${s.meal})` : ""} [hours ${s.hours}]`);
         }
     }
     const t = ev.totals;
@@ -187,7 +200,7 @@ export async function runAgent(
     const registry: Registry = prior ? { ...prior.registry } : await prepareRegistry(intake, log);
     const lastDate = addDays(intake.startDate, intake.nights);
 
-    let userText = `Trip request (dates ${intake.startDate} to ${lastDate}, ${intake.nights} nights):\n${JSON.stringify(intake, null, 2)}\n\nKnown places (id | name | kind | lat,lon | hours):\n${Object.values(registry).map(placeLine).join("\n")}`;
+    let userText = `Trip request (dates ${intake.startDate} to ${lastDate}, ${intake.nights} nights):\n${JSON.stringify(intake, null, 2)}\n\nKnown places (id | name | kind | area | lat,lon | hours):\n${Object.values(registry).map(placeLine).join("\n")}`;
     if (prior) {
         userText += `\n\nCurrent plan:\n${JSON.stringify(prior.draft)}\n\nIts check result:\n${describeEvaluation(prior.evaluation, registry)}\n\nThe traveler asks for this change: ${prior.instruction}\nChange only what the request needs, then submit the full plan.`;
     } else {
