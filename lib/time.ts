@@ -6,9 +6,11 @@ export function hhmmToMin(s: string) {
 }
 
 export function minToHhmm(min: number) {
-    const day = Math.floor(min / 1440);
-    const r = ((min % 1440) + 1440) % 1440;
-    const s = `${String(Math.floor(r / 60)).padStart(2, "0")}:${String(Math.round(r % 60)).padStart(2, "0")}`;
+    // round first, rounding only the minutes part gave times like 10:60
+    const total = Math.round(min);
+    const day = Math.floor(total / 1440);
+    const r = ((total % 1440) + 1440) % 1440;
+    const s = `${String(Math.floor(r / 60)).padStart(2, "0")}:${String(r % 60).padStart(2, "0")}`;
     return day > 0 ? `${s}+${day}d` : s;
 }
 

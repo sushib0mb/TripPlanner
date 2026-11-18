@@ -1,8 +1,17 @@
 "use client";
 
-import { DAY_COLORS } from "@/lib/colors";
+import { DAY_COLORS, readableText } from "@/lib/colors";
 import { minToHhmm } from "@/lib/time";
-import type { Evaluation, Leg, Registry, TimedStop } from "@/lib/types";
+import type { Evaluation, Leg, Registry, Segment, TimedStop } from "@/lib/types";
+
+// line code in the operator's own colors, like station signage
+function LineBadge({ s }: { s: Segment }) {
+    return (
+        <b style={{ background: s.color ?? "#555555", color: readableText(s.color ?? "#555555"), padding: "0 5px", borderRadius: 3 }}>
+            {s.short ?? s.mode}
+        </b>
+    );
+}
 
 interface Props {
     evaluation: Evaluation;
@@ -15,7 +24,9 @@ interface Props {
 type Item = { t: number; leg?: Leg; stop?: TimedStop };
 
 export default function Itinerary({ evaluation, registry, currency, busy, onRemove }: Props) {
-    const name = (id: string) => registry[id]?.name ?? id;
+    // stops carry the english name, the registry may only have the local one
+    const shown = new Map(evaluation.days.flatMap((d) => d.stops.map((s) => [s.placeId, s.name] as const)));
+    const name = (id: string) => shown.get(id) ?? registry[id]?.name ?? id;
     const t = evaluation.totals;
 
     return (
@@ -53,6 +64,22 @@ export default function Itinerary({ evaluation, registry, currency, busy, onRemo
                                         {it.leg.lines.length > 0 && <> ({it.leg.lines.join(", ")})</>}
                                         {it.leg.cost > 0 && <>, {Math.round(it.leg.cost)} {currency}</>} [time: {it.leg.timeSource}]
                                         {it.leg.note && <i> {it.leg.note}</i>}
+                                        {it.leg.segments && (
+                                            <ul>
+                                                {it.leg.segments.map((s, si) =>
+                                                    s.mode === "walk" ? (
+                                                        <li key={si}>
+                                                            {minToHhmm(s.departMin)} walk {Math.round(s.arriveMin - s.departMin)} min to {s.to}
+                                                        </li>
+                                                    ) : (
+                                                        <li key={si}>
+                                                            {minToHhmm(s.departMin)}-{minToHhmm(s.arriveMin)} <LineBadge s={s} /> {s.line}
+                                                            {s.headsign && <> toward {s.headsign}</>}, {s.from} → {s.to}, {s.stops + 1} stop{s.stops > 0 && "s"}
+                                                        </li>
+                                                    ),
+                                                )}
+                                            </ul>
+                                        )}
                                     </li>
                                 ) : (
                                     <li key={n}>

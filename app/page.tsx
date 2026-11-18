@@ -4,9 +4,10 @@ import dynamic from "next/dynamic";
 import { useState } from "react";
 import Itinerary from "@/components/Itinerary";
 import TripForm from "@/components/TripForm";
+import { SAMPLES, type Sample } from "@/lib/samplePlan";
 import type { Draft, Evaluation, Intake, Registry, StreamEvent } from "@/lib/types";
 
-// leaflet needs the browser
+// the map needs the browser
 const TripMap = dynamic(() => import("@/components/TripMap"), { ssr: false });
 
 const DEFAULT_INTAKE: Intake = {
@@ -86,12 +87,50 @@ export default function Home() {
             .finally(() => setBusy(false));
     }
 
+    // dev only: routes and checks a fixed plan without calling claude
+    function loadSample({ name, intake, draft, registry }: Sample) {
+        setBusy(true);
+        setLog([`dev: checking ${name} sample plan, no claude call`]);
+        setIntake(intake);
+        fetch("/api/check", { method: "POST", body: JSON.stringify({ intake, draft, registry }) })
+            .then((r) => r.json())
+            .then((data: { evaluation: Evaluation }) => setPlan({ draft, evaluation: data.evaluation, registry }))
+            .catch((e: Error) => setLog((l) => [...l, "error: " + e.message]))
+            .finally(() => setBusy(false));
+    }
+
+    // dev only: keeps the plan on screen as a sample file, named after the destination
+    function saveSample() {
+        if (!plan) return;
+        const name = intake.destination.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+        fetch("/api/dev/save-sample", { method: "POST", body: JSON.stringify({ name, intake, draft: plan.draft, registry: plan.registry }) })
+            .then((r) => r.json())
+            .then((d: { saved?: string; error?: string }) => setLog((l) => [...l, d.saved ? `dev: saved ${d.saved}` : `error: ${d.error}`]))
+            .catch((e: Error) => setLog((l) => [...l, "error: " + e.message]));
+    }
+
     return (
         <main>
             <h1>trip planner</h1>
             <TripForm intake={intake} busy={busy} onChange={setIntake} onSubmit={() => run({ intake })} />
+            {process.env.NODE_ENV === "development" &&
+                SAMPLES.map((s) => (
+                    <button key={s.name} type="button" disabled={busy} onClick={() => loadSample(s)}>
+                        dev: {s.name} sample
+                    </button>
+                ))}
+            {process.env.NODE_ENV === "development" && plan && (
+                <button type="button" disabled={busy} onClick={saveSample}>
+                    dev: save as sample
+                </button>
+            )}
 
-            {log.length > 0 && <pre style={{ maxHeight: 160, overflow: "auto" }}>{log.join("\n")}</pre>}
+            {log.length > 0 && (
+                // stays scrolled to the newest line so messages like the save confirmation are seen
+                <pre ref={(el) => el?.scrollTo(0, el.scrollHeight)} style={{ maxHeight: 160, overflow: "auto" }}>
+                    {log.join("\n")}
+                </pre>
+            )}
 
             {plan && (
                 <>
