@@ -1,7 +1,19 @@
 import { haversineKm, localToUtc, timezoneAt } from "./geo";
 import { hoursState } from "./hours";
 import { osrmRoute, transitRoute } from "./routing";
-import { AIRPORT_BEFORE_DEP_MIN, AIRPORT_EXIT_MIN, DINNER, DINNER_IF_AIRPORT_BY, DINNER_IF_HOTEL_BY, PACE_DAY } from "./rules";
+import {
+    AIRPORT_BEFORE_DEP_MIN,
+    AIRPORT_EXIT_MIN,
+    DINNER,
+    DINNER_IF_AIRPORT_BY,
+    DINNER_IF_HOTEL_BY,
+    estimate,
+    LUNCH,
+    LUNCH_EARLIEST,
+    LUNCH_LATEST,
+    MISSED_START_SLACK_MIN,
+    PACE_DAY,
+} from "./rules";
 import { addDays, hhmmToMin, minToHhmm } from "./time";
 import type { Draft, Evaluation, Intake, Issue, Leg, Place, Registry, TimedDay, TimedStop } from "./types";
 
@@ -23,6 +35,13 @@ interface Ctx {
     log: (msg: string) => void;
 }
 
+export interface EvaluateOptions {
+    log?: (msg: string) => void;
+    // place ids the traveler asked to keep on different days, so splitting them is not flagged
+    keepApart?: string[][];
+    signal?: AbortSignal;
+}
+
 // sights this close on different days are worth visiting together, e.g. the mfa and the gardner, 400 m apart
 const SPLIT_KM = 0.6;
 const MAX_SPLIT_WARNINGS = 4;
@@ -30,12 +49,12 @@ const MAX_SPLIT_WARNINGS = 4;
 const TRAVEL_SHARE = 0.3;
 
 // warnings only: a split can be deliberate, e.g. a museum that is open late on one day
-function groupingWarnings(days: TimedDay[], registry: Registry, keepApart: string[][] = []): Issue[] {
+function groupingWarnings(days: TimedDay[], registry: Registry, keepApart: string[][]): Issue[] {
     const apart = (a: string, b: string) => keepApart.some((g) => g.includes(a) && g.includes(b));
     const issues: Issue[] = [];
     // meals left out, there is a restaurant near something on most days
     const sights = days.flatMap((d) => d.stops.filter((s) => !s.meal && registry[s.placeId]).map((s) => ({ s, date: d.date, p: registry[s.placeId] })));
-    const splits: { km: number; message: string; date: string }[] = [];
+    const splits: { km: number; message: string; date: string; placeId: string }[] = [];
     for (let i = 0; i < sights.length; i++) {
         for (let j = i + 1; j < sights.length; j++) {
             const a = sights[i];
@@ -45,11 +64,11 @@ function groupingWarnings(days: TimedDay[], registry: Registry, keepApart: strin
             const km = haversineKm(a.p, b.p);
             if (km > SPLIT_KM) continue;
             const message = `${a.s.name} (${a.date}) is ${Math.round(km * 1000)} m from ${b.s.name} (${b.date}); visiting them the same day saves a trip`;
-            splits.push({ km, message, date: b.date });
+            splits.push({ km, message, date: b.date, placeId: b.p.id });
         }
     }
     splits.sort((x, y) => x.km - y.km);
-    for (const s of splits.slice(0, MAX_SPLIT_WARNINGS)) issues.push({ level: "warning", code: "split_area", day: s.date, message: s.message });
+    for (const s of splits.slice(0, MAX_SPLIT_WARNINGS)) issues.push({ level: "warning", code: "split_area", day: s.date, placeId: s.placeId, message: s.message });
 
     for (const d of days) {
         // airport transfers are fixed, so only count travel between the day's own stops and the hotel
@@ -70,18 +89,17 @@ function groupingWarnings(days: TimedDay[], registry: Registry, keepApart: strin
     return issues;
 }
 
-function timetableDate(date: string, today: string) {
+export function timetableDate(date: string, today: string) {
     const ahead = (Date.parse(date) - Date.parse(today)) / 86400000;
     if (ahead <= TIMETABLE_HORIZON_DAYS) return date;
     return addDays(date, -7 * Math.ceil((ahead - TIMETABLE_HORIZON_DAYS) / 7));
 }
 
-
 function estimateLeg(from: Place, to: Place, mode: Leg["mode"], tMin: number, note: string): Leg {
-    const km = haversineKm(from, to) * 1.3;
-    const minutes = mode === "walk" ? (km / 4.8) * 60 : (km / 25) * 60 + 10;
+    const straight = haversineKm(from, to);
+    const minutes = mode === "walk" ? estimate.walkMin(straight) : mode === "transit" ? estimate.transitMin(straight) : estimate.driveMin(straight);
     return {
-        fromId: from.id, toId: to.id, mode, departMin: tMin, arriveMin: tMin + minutes, minutes, km, cost: 0,
+        fromId: from.id, toId: to.id, mode, departMin: tMin, arriveMin: tMin + minutes, minutes, km: estimate.km(straight), cost: 0,
         costSource: "none", timeSource: "estimate", lines: [], geometry: [[from.lat, from.lon], [to.lat, to.lon]], note,
     };
 }
@@ -110,7 +128,7 @@ async function routeLeg(ctx: Ctx, from: Place, to: Place, date: string, tMin: nu
     }
 
     // walk when it is within the traveler's limit
-    if ((straight * 1.3 * 60) / 4.8 <= intake.maxWalkMin * 1.5) {
+    if (estimate.walkMin(straight) <= intake.maxWalkMin * 1.5) {
         const r = await osrmRoute("foot", from, to).catch(() => null);
         if (r && r.minutes <= intake.maxWalkMin) {
             return {
@@ -126,13 +144,32 @@ async function routeLeg(ctx: Ctx, from: Place, to: Place, date: string, tMin: nu
     if (ttDate !== date) ctx.borrowed.set(date, ttDate);
     const departUtc = localToUtc(ttDate, tMin, ctx.tz);
     ctx.transitCalls++;
-    const tr = await transitRoute(from, to, departUtc).catch((e: Error) => {
-        ctx.log(`transit lookup failed: ${e.message}`);
-        return null;
-    });
+    // null route means no transit in the data; an error means the service itself failed
+    const { tr, lookupError } = await transitRoute(from, to, departUtc).then(
+        (r) => ({ tr: r, lookupError: null as string | null }),
+        (e: unknown) => ({ tr: null, lookupError: e instanceof Error ? e.message : String(e) }),
+    );
+    const travelers = intake.adults + intake.kids;
+
+    // the timetable service did not answer: that says nothing about the plan, so use an estimate and say so,
+    // never an error that would make the plan look impossible
+    if (lookupError) {
+        ctx.log(`transit lookup failed: ${lookupError}`);
+        ctx.issues.push({
+            level: "warning",
+            code: "lookup_failed",
+            day: date,
+            placeId: to.id,
+            message: `${from.name} → ${to.name}: the transit timetable service did not answer (${lookupError}); this leg's time is an estimate`,
+        });
+        const leg = estimateLeg(from, to, "transit", tMin, "transit lookup failed, estimated");
+        leg.cost = ctx.draft.local_costs.transit_fare * travelers;
+        leg.costSource = "model estimate";
+        return leg;
+    }
+
     const wait = tr ? (tr.departUtc - departUtc) / 60000 : 0;
     if (tr && wait <= MAX_WAIT_MIN) {
-        const travelers = intake.adults + intake.kids;
         const local = (utc: number) => tMin + (utc - departUtc) / 60000;
         // transitous names the two ends START and END, use the real places instead
         const segments = tr.segments.map(({ departUtc: d, arriveUtc: a, ...s }) => ({
@@ -164,24 +201,20 @@ async function routeLeg(ctx: Ctx, from: Place, to: Place, date: string, tMin: nu
             level: tooFar ? "error" : "warning",
             code: "no_transit",
             day: date,
+            placeId: to.id,
             message: `${from.name} → ${to.name}: ${why}; walking ${Math.round(leg.minutes)} min instead${tooFar ? ", too far, choose places closer together" : ""}`,
         });
         leg.note = `${why}, walking (transit only)`;
         return leg;
     }
-    ctx.issues.push({ level: "warning", code: "transit_fallback", day: date, message: `${from.name} → ${to.name}: ${why}, using a taxi estimate` });
+    ctx.issues.push({ level: "warning", code: "transit_fallback", day: date, placeId: to.id, message: `${from.name} → ${to.name}: ${why}, using a taxi estimate` });
     const leg = await driveLeg(ctx, from, to, tMin, true);
     leg.note = why;
     return leg;
 }
 
-export async function evaluatePlan(
-    intake: Intake,
-    draft: Draft,
-    registry: Registry,
-    log: (msg: string) => void = () => {},
-    keepApart: string[][] = [],
-): Promise<Evaluation> {
+export async function evaluatePlan(intake: Intake, draft: Draft, registry: Registry, opts: EvaluateOptions = {}): Promise<Evaluation> {
+    const log = opts.log ?? (() => {});
     const issues: Issue[] = [];
     const hotel = registry[draft.hotel_place_id];
     const lastDate = addDays(intake.startDate, intake.nights);
@@ -196,6 +229,10 @@ export async function evaluatePlan(
     const travelers = intake.adults + intake.kids;
     const arr = registry.ARR;
     const dep = registry.DEP;
+    const route = (from: Place, to: Place, date: string, t: number) => {
+        opts.signal?.throwIfAborted();
+        return routeLeg(ctx, from, to, date, t);
+    };
 
     for (const d of draft.days) {
         if (d.date < intake.startDate || d.date > lastDate) {
@@ -218,30 +255,31 @@ export async function evaluatePlan(
         if (i === 0 && arr && intake.arrivalTime) {
             t = hhmmToMin(intake.arrivalTime) + AIRPORT_EXIT_MIN;
             log(`${date}: ${arr.name} → ${hotel.name}`);
-            const leg = await routeLeg(ctx, arr, hotel, date, t);
+            const leg = await route(arr, hotel, date, t);
             legs.push(leg);
             hotelAt = leg.arriveMin;
             t = leg.arriveMin + 15;
         }
 
-        for (const s of draftDay?.stops ?? []) {
+        for (const [index, s] of (draftDay?.stops ?? []).entries()) {
             const place = registry[s.place_id];
             if (!place) {
-                issues.push({ level: "error", code: "unknown_place", day: date, message: `place_id ${s.place_id} was not returned by geocode or search_places` });
+                issues.push({ level: "error", code: "unknown_place", day: date, placeId: s.place_id, message: `place_id ${s.place_id} was not returned by geocode or search_places` });
                 continue;
             }
             const name = s.name_en || place.name;
             // carry the english name so transit walks to and from this stop show it too
             const shown: Place = name === place.name ? place : { ...place, name };
             log(`${date}: ${cur.name} → ${name}`);
-            const leg = await routeLeg(ctx, cur, shown, date, t);
+            const leg = await route(cur, shown, date, t);
             legs.push(leg);
             const arriveMin = leg.arriveMin;
             let startMin = arriveMin;
             if (s.start_after) {
                 const wanted = hhmmToMin(s.start_after);
-                if (arriveMin > wanted + 15) {
-                    issues.push({ level: "error", code: "missed_start", day: date, message: `${name}: planned for ${s.start_after} but arrives ${minToHhmm(arriveMin)}` });
+                // a not-before hold only waits; arriving later is fine unless the place closes, checked below
+                if (s.start_kind !== "not_before" && arriveMin > wanted + MISSED_START_SLACK_MIN) {
+                    issues.push({ level: "error", code: "missed_start", day: date, placeId: place.id, message: `${name}: planned for ${s.start_after} but arrives ${minToHhmm(arriveMin)}` });
                 }
                 startMin = Math.max(arriveMin, wanted);
             }
@@ -250,9 +288,9 @@ export async function evaluatePlan(
             const atEnd = hoursState(place.openingHours, date, endMin - 1);
             const hours = atStart === "closed" || atEnd === "closed" ? "closed" : atStart;
             if (hours === "closed") {
-                issues.push({ level: "error", code: "closed", day: date, message: `${name} is closed during ${minToHhmm(startMin)}-${minToHhmm(endMin)} (hours: ${place.openingHours})` });
+                issues.push({ level: "error", code: "closed", day: date, placeId: place.id, message: `${name} is closed during ${minToHhmm(startMin)}-${minToHhmm(endMin)} (hours: ${place.openingHours})` });
             }
-            stops.push({ placeId: place.id, name, arriveMin, startMin, endMin, cost: s.cost_per_person * travelers, hours, meal: s.meal, note: s.note });
+            stops.push({ index, placeId: place.id, name, arriveMin, startMin, endMin, cost: s.cost_per_person * travelers, hours, meal: s.meal, note: s.note });
             cur = shown;
             t = endMin;
         }
@@ -261,7 +299,7 @@ export async function evaluatePlan(
         const latestAtAirport = departing ? hhmmToMin(intake.departureTime) - AIRPORT_BEFORE_DEP_MIN : 0;
         if (departing) {
             log(`${date}: ${cur.name} → ${dep.name}`);
-            const leg = await routeLeg(ctx, cur, dep, date, t);
+            const leg = await route(cur, dep, date, t);
             legs.push(leg);
             if (leg.arriveMin > latestAtAirport) {
                 issues.push({ level: "error", code: "misses_flight", day: date, message: `reaches ${dep.name} at ${minToHhmm(leg.arriveMin)}, needs to be there by ${minToHhmm(latestAtAirport)}` });
@@ -269,7 +307,7 @@ export async function evaluatePlan(
         } else {
             let back = hotelAt ?? pace.start;
             if (cur.id !== hotel.id) {
-                const leg = await routeLeg(ctx, cur, hotel, date, t);
+                const leg = await route(cur, hotel, date, t);
                 legs.push(leg);
                 back = leg.arriveMin;
             }
@@ -294,12 +332,17 @@ export async function evaluatePlan(
         if (freeEvening && !dinner) {
             issues.push({ level: "error", code: "no_dinner", day: date, message: `no dinner stop; add a restaurant with meal "dinner" starting ${minToHhmm(DINNER.from)}-${minToHhmm(DINNER.to)}` });
         } else if (dinner && (dinner.startMin < DINNER.from || dinner.startMin > DINNER.to)) {
-            issues.push({ level: "error", code: "dinner_time", day: date, message: `dinner at ${dinner.name} starts ${minToHhmm(dinner.startMin)}; it should start ${minToHhmm(DINNER.from)}-${minToHhmm(DINNER.to)}` });
+            issues.push({ level: "error", code: "dinner_time", day: date, placeId: dinner.placeId, message: `dinner at ${dinner.name} starts ${minToHhmm(dinner.startMin)}; it should start ${minToHhmm(DINNER.from)}-${minToHhmm(DINNER.to)}` });
+        }
+        // a warning, not an error: a late lunch after a long morning visit is unusual, not impossible
+        const lunch = stops.find((s) => s.meal === "lunch");
+        if (lunch && (lunch.startMin < LUNCH_EARLIEST || lunch.startMin > LUNCH_LATEST)) {
+            issues.push({ level: "warning", code: "lunch_time", day: date, placeId: lunch.placeId, message: `lunch at ${lunch.name} starts ${minToHhmm(lunch.startMin)}; lunch usually starts ${minToHhmm(LUNCH.from)}-${minToHhmm(LUNCH.to)}` });
         }
         days.push({ date, stops, legs });
     }
 
-    issues.push(...groupingWarnings(days, registry, keepApart));
+    issues.push(...groupingWarnings(days, registry, opts.keepApart ?? []));
 
     if (ctx.borrowed.size) {
         const pairs = [...ctx.borrowed].map(([d, t]) => `${d} uses ${t}`).join(", ");

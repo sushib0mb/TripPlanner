@@ -1,9 +1,12 @@
 "use client";
 
-import { DAY_COLORS, readableText } from "@/lib/colors";
+import { useEffect, useRef } from "react";
+import { dayColor, readableText } from "@/lib/colors";
+import { daySteps } from "@/lib/mapData";
 import { stopNames } from "@/lib/names";
 import { minToHhmm } from "@/lib/time";
 import type { Evaluation, Leg, Registry, Segment, TimedStop } from "@/lib/types";
+import type { Focus } from "./TripMap";
 
 // line code in the operator's own colors, like station signage
 function LineBadge({ s }: { s: Segment }) {
@@ -19,18 +22,27 @@ interface Props {
     registry: Registry;
     currency: string;
     busy: boolean;
-    onRemove: (date: string, placeId: string) => void;
+    // the stop's position in its day of the draft, which stays right when a meal shares a sight's place id
+    onRemove: (date: string, index: number) => void;
     // the scheduler's one-line reason per day, e.g. "Fenway + Back Bay"
     reasons?: Record<string, string>;
+    focus: Focus | null;
+    onFocus: (focus: Focus | null) => void;
 }
 
-type Item = { t: number; leg?: Leg; stop?: TimedStop };
+type Item = { t: number; step: number; leg?: Leg; stop?: TimedStop; number?: number };
 
-export default function Itinerary({ evaluation, registry, currency, busy, onRemove, reasons }: Props) {
+export default function Itinerary({ evaluation, registry, currency, busy, onRemove, reasons, focus, onFocus }: Props) {
     // stops carry the english name, the registry may only have the local one
     const shown = stopNames(evaluation.days);
     const name = (id: string) => shown.get(id) ?? registry[id]?.name ?? id;
     const t = evaluation.totals;
+    const current = useRef<HTMLLIElement>(null);
+
+    // a stop clicked on the map scrolls into view here; focus set from this list leaves the scroll alone
+    useEffect(() => {
+        if (focus?.from !== "list") current.current?.scrollIntoView({ block: "nearest", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+    }, [focus]);
 
     return (
         <div>
@@ -51,21 +63,34 @@ export default function Itinerary({ evaluation, registry, currency, busy, onRemo
             </p>
 
             {evaluation.days.map((d, di) => {
+                const color = dayColor(di);
+                const steps = daySteps(d);
+                const stepOf = new Map(steps.filter((s) => s.stop !== null).map((s) => [s.stop!, s.leg]));
                 // legs and stops in time order, leaving out moves that stay in one place, like a lunch break at a museum
-                const moves = d.legs.filter((leg) => leg.fromId !== leg.toId);
-                const items: Item[] = [...moves.map((leg) => ({ t: leg.departMin, leg })), ...d.stops.map((stop) => ({ t: stop.arriveMin, stop }))];
+                const items: Item[] = [
+                    ...d.legs.flatMap((leg, li) => (leg.fromId !== leg.toId ? [{ t: leg.departMin, step: li, leg }] : [])),
+                    ...d.stops.map((stop, si) => ({ t: stop.arriveMin, step: stepOf.get(si) ?? -1, stop, number: si + 1 })),
+                ];
                 items.sort((a, b) => a.t - b.t || (a.leg ? -1 : 1));
+                const isCurrent = (it: Item) => focus !== null && focus.day === di && focus.step === it.step && it.step >= 0;
+                const select = (it: Item) => it.step >= 0 && onFocus(isCurrent(it) ? null : { day: di, step: it.step, from: "list" });
                 return (
                     <div key={d.date}>
-                        <h3 style={{ color: DAY_COLORS[di % DAY_COLORS.length] }}>
+                        <h3 style={{ color }}>
                             day {di + 1}, {d.date}
                         </h3>
                         {reasons?.[d.date] && <p>{reasons[d.date]}</p>}
-                        <ul>
-                            {items.map((it, n) =>
-                                it.leg ? (
-                                    <li key={n}>
-                                        {minToHhmm(it.leg.departMin)} {it.leg.mode} {Math.round(it.leg.minutes)} min {name(it.leg.fromId)} → {name(it.leg.toId)}
+                        <ul style={{ listStyle: "none", paddingLeft: 8 }}>
+                            {items.map((it) => {
+                                const here = isCurrent(it);
+                                const key = it.leg ? `leg-${it.step}` : `stop-${it.stop!.index}`;
+                                // a move and the stop it reaches are one step; the stop row carries the highlight ref
+                                const ref = here && (it.stop !== undefined || steps[it.step]?.stop === null) ? current : undefined;
+                                return it.leg ? (
+                                    <li key={key} ref={ref} className={`itinerary-row${here ? " is-current" : ""}`} style={{ ["--c" as string]: color }}>
+                                        <button type="button" className="row-link" onClick={() => select(it)} aria-pressed={here}>
+                                            {minToHhmm(it.leg.departMin)} {it.leg.mode} {Math.round(it.leg.minutes)} min {name(it.leg.fromId)} → {name(it.leg.toId)}
+                                        </button>
                                         {it.leg.lines.length > 0 && <> ({it.leg.lines.join(", ")})</>}
                                         {it.leg.cost > 0 && <>, {Math.round(it.leg.cost)} {currency}</>} [time: {it.leg.timeSource}]
                                         {it.leg.note && <i> {it.leg.note}</i>}
@@ -87,18 +112,23 @@ export default function Itinerary({ evaluation, registry, currency, busy, onRemo
                                         )}
                                     </li>
                                 ) : (
-                                    <li key={n}>
-                                        <b>
-                                            {minToHhmm(it.stop!.startMin)}-{minToHhmm(it.stop!.endMin)} {it.stop!.name}
-                                        </b>{" "}
+                                    <li key={key} ref={ref} className={`itinerary-row${here ? " is-current" : ""}`} style={{ ["--c" as string]: color }}>
+                                        <span className={`trip-marker trip-marker--badge trip-marker--${it.stop!.meal ? "meal" : "stop"}`} style={{ ["--c" as string]: color, marginRight: 6 }} aria-hidden>
+                                            {it.number}
+                                        </span>
+                                        <button type="button" className="row-link" onClick={() => select(it)} aria-pressed={here}>
+                                            <b>
+                                                {minToHhmm(it.stop!.startMin)}-{minToHhmm(it.stop!.endMin)} {it.stop!.name}
+                                            </b>
+                                        </button>{" "}
                                         [hours: {it.stop!.hours}]{it.stop!.cost > 0 && <>, {Math.round(it.stop!.cost)} {currency}</>}
                                         {it.stop!.note && <i> {it.stop!.note}</i>}{" "}
-                                        <button disabled={busy} onClick={() => onRemove(d.date, it.stop!.placeId)}>
+                                        <button type="button" disabled={busy} onClick={() => onRemove(d.date, it.stop!.index)}>
                                             remove
                                         </button>
                                     </li>
-                                ),
-                            )}
+                                );
+                            })}
                         </ul>
                     </div>
                 );

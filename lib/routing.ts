@@ -1,4 +1,4 @@
-import { cachedJson } from "./http";
+import { cachedJson, TTL } from "./http";
 import type { Segment } from "./types";
 
 type LatLon = { lat: number; lon: number };
@@ -122,7 +122,7 @@ export async function transitRoute(a: LatLon, b: LatLon, departUtc: number): Pro
         // feeds with translations then return english line, stop and direction names
         language: "en",
     });
-    const data = await cachedJson<MotisPlan>("https://api.transitous.org/api/v6/plan?" + params, { gapMs: 1200, timeoutMs: 60000 });
+    const data = await cachedJson<MotisPlan>("https://api.transitous.org/api/v6/plan?" + params, { gapMs: 1200, timeoutMs: 60000, ttlMs: TTL.week });
     const it = data.itineraries?.[0];
     if (!it) return null;
     const vehicle = it.legs.filter((l) => !["WALK", "BIKE", "CAR"].includes(l.mode));

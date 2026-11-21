@@ -1,9 +1,9 @@
 import { haversineKm } from "./geo";
 import { fitOpen, hoursState } from "./hours";
 import { walkMatrix } from "./routing";
-import { AIRPORT_BEFORE_DEP_MIN, AIRPORT_EXIT_MIN, DINNER, DINNER_IF_AIRPORT_BY, DINNER_IF_HOTEL_BY, LUNCH, PACE_DAY } from "./rules";
+import { AIRPORT_BEFORE_DEP_MIN, AIRPORT_EXIT_MIN, DINNER, DINNER_IF_AIRPORT_BY, DINNER_IF_HOTEL_BY, estimate, LUNCH, LUNCH_LATEST, PACE_DAY } from "./rules";
 import { addDays, hhmmToMin, minToHhmm } from "./time";
-import type { Draft, DraftDay, DraftStop, Intake, Meal, Place, Registry, Shortlist, ShortlistItem, TimeOfDay } from "./types";
+import type { Draft, DraftDay, DraftStop, Intake, Meal, Place, Registry, Shortlist, ShortlistItem, StartKind, TimeOfDay } from "./types";
 
 // turns the agent's shortlist into days: groups nearby places, spreads them over the trip, orders each day,
 // places lunch and dinner from the agent's options and fits opening hours and the pace's day window.
@@ -55,6 +55,46 @@ export interface ScheduleResult {
 
 export const slotKey = (date: string, kind: Meal) => `${date} ${kind}`;
 
+// real travel times seen by the checker, fed back so a second schedule plans with them instead of guesses
+export interface TravelFeedback {
+    // door-to-door minutes per ordered pair of place ids, see legKey, and whether the move was a walk
+    legs: Map<string, { minutes: number; walk: boolean }>;
+    // real transit time over the estimate, across observed legs; scales the estimate for unseen pairs
+    transitFactor: number;
+}
+
+export const legKey = (fromId: string, toId: string) => `${fromId}>${toId}`;
+
+export interface ScheduleOptions {
+    // the plan being changed: places keep their days where they can
+    previous?: Draft;
+    // restaurants already chosen per meal slot key
+    fixedMeals?: Map<string, ShortlistItem>;
+    feedback?: TravelFeedback;
+}
+
+// a restaurant may add at most this much walking to the day, about 12-15 minutes
+export const MAX_MEAL_DETOUR_KM = 1.0;
+
+const mealLength = (kind: Meal) => (kind === "lunch" ? LUNCH.length : DINNER.length);
+
+// extra distance a restaurant adds between where the traveler is and where they go next
+export const mealDetourKm = (slot: { from: Place; to: Place }, p: { lat: number; lon: number }) =>
+    haversineKm(slot.from, p) + haversineKm(p, slot.to) - haversineKm(slot.from, slot.to);
+
+// why a restaurant cannot serve a meal slot, or null when it can: near enough and open for the whole meal
+// when it starts within 45 minutes of the planned time. the agent's picks and the scheduler's re-checks use
+// this one rule
+export function mealMisfit(slot: { date: string; kind: Meal; at: number; from: Place; to: Place }, p: Place): string | null {
+    const detour = mealDetourKm(slot, p);
+    if (detour > MAX_MEAL_DETOUR_KM) return `${p.name} is ${detour.toFixed(1)} km out of the way; pick one nearer ${slot.from.name}`;
+    const length = mealLength(slot.kind);
+    if (fitOpen(p.openingHours, slot.date, slot.at - 15, length, slot.at + length + 45) === null) {
+        return `${p.name} is not open around ${minToHhmm(slot.at)} (hours: ${p.openingHours})`;
+    }
+    return null;
+}
+
 interface Frame {
     date: string;
     start: number;
@@ -77,6 +117,8 @@ interface Slot {
     // waiting was intended (opening time, pin, meal), so the checker should not start before holdAt
     hold: boolean;
     holdAt?: number;
+    // a booked start the traveler must make, or only a hold that later arrival may pass
+    startKind: StartKind;
 }
 
 interface DayPlan {
@@ -115,7 +157,7 @@ function edgeKm(a: Place, b: Place) {
     return Math.hypot(dLat, dLon * Math.cos((((a.lat + b.lat) / 2) * Math.PI) / 180)) * 111;
 }
 
-async function buildCtx(intake: Intake, registry: Registry, hotel: Place, places: Place[]): Promise<Ctx> {
+async function buildCtx(intake: Intake, registry: Registry, hotel: Place, places: Place[], feedback?: TravelFeedback): Promise<Ctx> {
     const all = [hotel, ...places, ...(["ARR", "DEP"] as const).map((k) => registry[k]).filter((p): p is Place => !!p)];
     const unique = [...new Map(all.map((p) => [p.id, p])).values()];
     const index = new Map(unique.map((p, i) => [p.id, i]));
@@ -125,19 +167,26 @@ async function buildCtx(intake: Intake, registry: Registry, hotel: Place, places
         const i = index.get(a.id);
         const j = index.get(b.id);
         const m = matrix && i !== undefined && j !== undefined ? matrix[i][j] : undefined;
-        return m !== undefined && Number.isFinite(m) ? m : (haversineKm(a, b) * 1.3 * 60) / 4.8;
+        return m !== undefined && Number.isFinite(m) ? m : estimate.walkMin(haversineKm(a, b));
     };
+    const factor = feedback?.transitFactor ?? 1;
     const travel = (a: Place, b: Place) => {
         if (a.id === b.id) return 0;
+        // a real time from the last check beats any estimate
+        const seen = feedback?.legs.get(legKey(a.id, b.id));
+        if (seen) return seen.minutes;
         const walk = walkMin(a, b);
         if (walk <= intake.maxWalkMin) return walk;
-        const km = haversineKm(a, b) * 1.3;
-        if (intake.getAround === "car") return 10 + (km / 25) * 60;
-        // cautious transit guess: waiting, transfers and station walks at about 19 km/h door to door
-        return 12 + km * 3.2;
+        const straight = haversineKm(a, b);
+        if (intake.getAround === "car") return estimate.driveMin(straight);
+        return estimate.transitMin(straight) * factor;
     };
-    const near = (a: Place, b: Place) => Math.min(walkMin(a, b), (edgeKm(a, b) * 1.3 * 60) / 4.8);
-    const walkable = (a: Place, b: Place) => a.id === b.id || walkMin(a, b) <= intake.maxWalkMin;
+    const near = (a: Place, b: Place) => Math.min(walkMin(a, b), estimate.walkMin(edgeKm(a, b)));
+    const walkable = (a: Place, b: Place) => {
+        if (a.id === b.id) return true;
+        const seen = feedback?.legs.get(legKey(a.id, b.id));
+        return seen ? seen.walk : walkMin(a, b) <= intake.maxWalkMin;
+    };
     return { intake, registry, hotel, travel, near, walkable, mealCost: 20 };
 }
 
@@ -257,8 +306,10 @@ function makeUnits(acts: ShortlistItem[], ctx: Ctx, list: Shortlist, maxCap: num
 
 // lunch before the next stop once it is lunchtime, or late morning when that stop would run well past lunch;
 // an early long visit goes first and lunch follows it
-const lunchFirst = (t: number, go: number, length: number) => t >= LUNCH.from - 15 || (t >= 10 * 60 + 30 && t + go + length > LUNCH.to + 30);
-const LATEST_LUNCH = 15 * 60;
+const lunchFirst = (t: number, go: number, length: number) => t >= LUNCH.from - 15 || (t >= 10 * 60 + 30 && t + go + length > LUNCH_LATEST);
+// each minute a lunch starts after its window weighs this much when comparing orders, so an order that fits
+// lunch in, e.g. the short museum before the long one, wins over one that pushes lunch to mid-afternoon
+const LATE_LUNCH_WEIGHT = 3;
 // before restaurants are chosen, a meal is assumed to be this far from the stops around it
 const MEAL_DETOUR_MIN = 10;
 // a meal may add at most this much travel to the day, unless the agent marked the restaurant must, worth a trip of its own
@@ -295,8 +346,9 @@ function roughScore(frame: Frame, order: ShortlistItem[], ctx: Ctx) {
         const p = ctx.registry[item.place_id];
         const go = ctx.travel(at, p);
         if (!lunchDone && lunchFirst(t, go, item.duration_min)) {
-            score += Math.max(0, LUNCH.from - t - MEAL_DETOUR_MIN) * 0.3;
-            t = Math.max(t + MEAL_DETOUR_MIN, LUNCH.from) + LUNCH.length;
+            const lunchAt = Math.max(t + MEAL_DETOUR_MIN, LUNCH.from);
+            score += Math.max(0, LUNCH.from - t - MEAL_DETOUR_MIN) * 0.3 + Math.max(0, lunchAt - LUNCH.to) * LATE_LUNCH_WEIGHT;
+            t = lunchAt + LUNCH.length;
             lunchDone = true;
         }
         const s = place(item, p, frame.date, t + go, frame.end);
@@ -304,7 +356,11 @@ function roughScore(frame: Frame, order: ShortlistItem[], ctx: Ctx) {
         t = s.start + item.duration_min;
         at = p;
     }
-    if (!lunchDone && t > LATEST_LUNCH) score += 200;
+    if (!lunchDone && frame.lunch) {
+        // lunch after the last sight, or none at all when the day ran past the window
+        const lunchAt = Math.max(t + MEAL_DETOUR_MIN, LUNCH.from);
+        score += lunchAt > LUNCH_LATEST ? 200 : Math.max(0, lunchAt - LUNCH.to) * LATE_LUNCH_WEIGHT;
+    }
     if (frame.dinner) {
         t = Math.max(t + 15, frame.dinnerAt) + DINNER.length;
         score += t > DINNER.to + DINNER.length ? (t - DINNER.to - DINNER.length) * 5 : 0;
@@ -355,6 +411,8 @@ function bestOrder(frame: Frame, acts: ShortlistItem[], ctx: Ctx): ShortlistItem
 // restaurants for every meal of the trip at once, cheapest detours first, so early days do not take the
 // options later days need; options offered for the other meal are a last resort
 function assignMeals(slots: MealSlot[], options: ShortlistItem[], fr: Frame[], ctx: Ctx, fixed: Map<string, ShortlistItem>) {
+    // picks made for an earlier schedule are checked again, a slot may have moved since
+    const rejected: string[] = [];
     const pairs: { slot: number; option: number; cost: number }[] = [];
     slots.forEach((slot, i) => {
         options.forEach((o, j) => {
@@ -374,11 +432,17 @@ function assignMeals(slots: MealSlot[], options: ShortlistItem[], fr: Frame[], c
     const chosen = new Map<number, ShortlistItem>();
     const taken = new Set<string>();
     slots.forEach((slot, i) => {
-        const pick = fixed.get(slotKey(fr[slot.day].date, slot.kind));
-        if (pick && ctx.registry[pick.place_id] && !taken.has(pick.place_id)) {
-            chosen.set(i, pick);
-            taken.add(pick.place_id);
+        const key = slotKey(fr[slot.day].date, slot.kind);
+        const pick = fixed.get(key);
+        const p = pick && ctx.registry[pick.place_id];
+        if (!pick || !p || taken.has(pick.place_id)) return;
+        const misfit = mealMisfit({ ...slot, date: fr[slot.day].date }, p);
+        if (misfit) {
+            rejected.push(`${key}: the chosen ${misfit} now that the day moved; choose again`);
+            return;
         }
+        chosen.set(i, pick);
+        taken.add(pick.place_id);
     });
     for (const pair of pairs) {
         const place = options[pair.option].place_id;
@@ -386,7 +450,7 @@ function assignMeals(slots: MealSlot[], options: ShortlistItem[], fr: Frame[], c
         chosen.set(pair.slot, options[pair.option]);
         taken.add(place);
     }
-    return chosen;
+    return { chosen, rejected };
 }
 
 // the day with real choices: restaurants picked, opening hours fitted, holds marked where waiting is intended
@@ -407,7 +471,7 @@ function realize(frame: Frame, order: ShortlistItem[], ctx: Ctx, day: number, me
             // planning pass: hold the time, the restaurant is chosen once every day is laid out
             const start = round5(Math.max(t + MEAL_DETOUR_MIN, target));
             need?.push({ day, kind, from: at, to: next, at: start });
-            slots.push({ item: { place_id: "", priority: "nice", duration_min: length, cost_per_person: 0, meal: kind }, place: at, start, end: start + length, hold: true });
+            slots.push({ item: { place_id: "", priority: "nice", duration_min: length, cost_per_person: 0, meal: kind }, place: at, start, end: start + length, hold: true, startKind: "not_before" });
             t = start + length + MEAL_DETOUR_MIN;
             return;
         }
@@ -424,7 +488,7 @@ function realize(frame: Frame, order: ShortlistItem[], ctx: Ctx, day: number, me
                 name_en: `${kind === "lunch" ? "Lunch" : "Dinner"} near ${at.name}`,
                 note: "no listed restaurant close by, eat at or around here",
             };
-            slots.push({ item, place: at, start, end: start + length, hold: true });
+            slots.push({ item, place: at, start, end: start + length, hold: true, startKind: "not_before" });
             t = start + length;
             return;
         }
@@ -433,7 +497,7 @@ function realize(frame: Frame, order: ShortlistItem[], ctx: Ctx, day: number, me
         const wanted = Math.max(arrive, target);
         const start = round5(fitOpen(p.openingHours, frame.date, wanted, length, wanted + length + 60) ?? wanted);
         const floor = kind === "lunch" ? round5(fitOpen(p.openingHours, frame.date, LUNCH.from, length, LUNCH.to + length) ?? LUNCH.from) : start;
-        slots.push({ item: { ...option, meal: kind, duration_min: length }, place: p, start, end: start + length, hold: true, holdAt: Math.min(floor, start) });
+        slots.push({ item: { ...option, meal: kind, duration_min: length }, place: p, start, end: start + length, hold: true, holdAt: Math.min(floor, start), startKind: "not_before" });
         t = start + length;
         at = p;
     };
@@ -452,11 +516,14 @@ function realize(frame: Frame, order: ShortlistItem[], ctx: Ctx, day: number, me
         const nearOpening = opens !== null && start - opens < HOLD_NEAR_OPENING_MIN && opens > frame.start;
         const pinned = !!item.start_after || !!item.time;
         const hold = pinned || nearOpening || s.start > arrive;
-        slots.push({ item, place: p, start, end: start + item.duration_min, hold, holdAt: nearOpening && !pinned ? round5(opens) : start });
+        // only a fixed start from the agent (a booked tour) is a commitment; part-of-day pins, opening times
+        // and waits are holds that a later real arrival may pass
+        const startKind: StartKind = item.start_after ? "fixed" : "not_before";
+        slots.push({ item, place: p, start, end: start + item.duration_min, hold, holdAt: nearOpening && !pinned ? round5(opens) : start, startKind });
         t = start + item.duration_min;
         at = p;
     }
-    if (!lunchDone && t <= LATEST_LUNCH) eat("lunch", frame.endAt, LUNCH.from);
+    if (!lunchDone && t + MEAL_DETOUR_MIN <= LUNCH_LATEST) eat("lunch", frame.endAt, LUNCH.from);
     if (frame.dinner) {
         eat("dinner", frame.endAt, frame.dinnerAt);
         const dinner = slots.find((s) => s.item.meal === "dinner");
@@ -548,26 +615,29 @@ function assign(units: string[][], fr: Frame[], items: Map<string, ShortlistItem
     return info.map((u, i) => ({ ids: u.ids, day: day[i] }));
 }
 
-export async function schedule(
-    intake: Intake,
-    list: Shortlist,
-    registry: Registry,
-    previous?: Draft,
-    fixedMeals: Map<string, ShortlistItem> = new Map(),
-): Promise<ScheduleResult> {
+export async function schedule(intake: Intake, list: Shortlist, registry: Registry, opts: ScheduleOptions = {}): Promise<ScheduleResult> {
+    const fixedMeals = opts.fixedMeals ?? new Map<string, ShortlistItem>();
     const problems: string[] = [];
     const dropped: Dropped[] = [];
     const hotel = registry[list.hotel_place_id];
     if (!hotel) throw new Error(`hotel_place_id ${list.hotel_place_id} was not returned by geocode or search_places`);
-    const known = list.items.filter((i) => {
-        if (registry[i.place_id] && i.place_id !== "ARR" && i.place_id !== "DEP") return true;
-        problems.push(`unknown or airport place_id ${i.place_id}, left out`);
-        return false;
+    const seen = new Set<string>();
+    // copies, so fixing an item below never changes the caller's shortlist
+    const known = list.items.flatMap((i) => {
+        if (!registry[i.place_id] || i.place_id === "ARR" || i.place_id === "DEP") {
+            problems.push(`unknown or airport place_id ${i.place_id}, left out`);
+            return [];
+        }
+        // a sight listed twice would be visited twice; a restaurant may be offered for both meals
+        const key = `${i.place_id}|${i.meal ?? ""}`;
+        if (seen.has(key)) return [];
+        seen.add(key);
+        return [{ ...i }];
     });
-    const items = new Map(known.map((i) => [i.place_id, i]));
     const acts = known.filter((i) => !i.meal);
     const meals = known.filter((i) => i.meal);
-    const ctx = await buildCtx(intake, registry, hotel, known.map((i) => registry[i.place_id]));
+    const items = new Map(acts.map((i) => [i.place_id, i]));
+    const ctx = await buildCtx(intake, registry, hotel, known.map((i) => registry[i.place_id]), opts.feedback);
     const prices = meals.map((m) => m.cost_per_person).sort((a, b) => a - b);
     if (prices.length) ctx.mealCost = prices[Math.floor(prices.length / 2)];
     const fr = frames(ctx);
@@ -579,7 +649,7 @@ export async function schedule(
     }
 
     const maxCap = Math.max(...fr.map(capacity), 60);
-    const assigned = assign(makeUnits(acts, ctx, list, maxCap), fr, items, ctx, list, previous);
+    const assigned = assign(makeUnits(acts, ctx, list, maxCap), fr, items, ctx, list, opts.previous);
     const byDay: ShortlistItem[][] = fr.map(() => []);
     for (const u of assigned) {
         for (const id of u.ids) {
@@ -639,7 +709,8 @@ export async function schedule(
     // restaurants for the whole trip at once, then the final timings with them
     const need: MealSlot[] = [];
     fr.forEach((f, d) => realize(f, orders[d], ctx, d, undefined, need));
-    const chosen = assignMeals(need, meals, fr, ctx, fixedMeals);
+    const { chosen, rejected } = assignMeals(need, meals, fr, ctx, fixedMeals);
+    problems.push(...rejected);
     const dayMeals = fr.map((_, d) => {
         const mine: Partial<Record<Meal, ShortlistItem>> = {};
         need.forEach((slot, i) => {
@@ -650,17 +721,19 @@ export async function schedule(
     fr.forEach((f, d) => (plans[d] = realize(f, orders[d], ctx, d, dayMeals[d])));
 
     // estimated cost against the budget: places and meals, fares for every move that is not a walk, the rental car
+    // the airport transfers count too, the checker bills both
     const travelers = intake.adults + intake.kids;
-    const estimate = () =>
-        plans.reduce((a, p) => a + p.slots.reduce((b, s) => b + s.item.cost_per_person * travelers, 0) + p.rides * list.local_costs.transit_fare * travelers, 0) +
-        (intake.getAround === "car" ? intake.carDailyRate * (intake.nights + 1) : 0) +
-        (registry.ARR && !ctx.walkable(registry.ARR, hotel) ? list.local_costs.transit_fare * travelers : 0);
-    while (estimate() > intake.budget * BUDGET_SHARE) {
+    const fare = list.local_costs.transit_fare * travelers;
+    const airportRides = (registry.ARR && intake.arrivalTime && !ctx.walkable(registry.ARR, hotel) ? 1 : 0) + (registry.DEP && intake.departureTime ? 1 : 0);
+    const estimateCost = () =>
+        plans.reduce((a, p) => a + p.slots.reduce((b, s) => b + s.item.cost_per_person * travelers, 0) + p.rides * fare, 0) +
+        (intake.getAround === "car" ? intake.carDailyRate * (intake.nights + 1) : airportRides * fare);
+    while (estimateCost() > intake.budget * BUDGET_SHARE) {
         const costly = orders
             .flatMap((o, d) => o.filter((a) => a.priority === "nice" && a.cost_per_person > 0).map((a) => ({ a, d })))
             .sort((x, y) => y.a.cost_per_person - x.a.cost_per_person)[0];
         if (!costly) {
-            problems.push(`estimated ${Math.round(estimate())} ${intake.currency} is near or over the ${intake.budget} ${intake.currency} budget; mark costly sights nice or offer cheaper restaurants`);
+            problems.push(`estimated ${Math.round(estimateCost())} ${intake.currency} is near or over the ${intake.budget} ${intake.currency} budget; mark costly sights nice or offer cheaper restaurants`);
             break;
         }
         orders[costly.d] = orders[costly.d].filter((a) => a !== costly.a);
@@ -677,6 +750,7 @@ export async function schedule(
         const stops: DraftStop[] = plan.slots.map((s) => ({
             place_id: s.place.id,
             start_after: s.hold ? minToHhmm(s.holdAt ?? s.start) : undefined,
+            start_kind: s.hold ? s.startKind : undefined,
             duration_min: s.item.duration_min,
             cost_per_person: s.item.cost_per_person,
             meal: s.item.meal,
@@ -718,7 +792,9 @@ export function shortlistFromDraft(draft: Draft, registry?: Registry): Shortlist
             if (seen.has(s.place_id)) continue;
             seen.add(s.place_id);
             const priority = s.meal ? "nice" : "must";
-            items.push({ place_id: s.place_id, priority, duration_min: s.duration_min, cost_per_person: s.cost_per_person, meal: s.meal, name_en: s.name_en, note: s.note });
+            // a start the scheduler marked as a commitment stays one; plain holds are left to the new schedule
+            const start_after = s.start_kind === "fixed" ? s.start_after : undefined;
+            items.push({ place_id: s.place_id, priority, duration_min: s.duration_min, cost_per_person: s.cost_per_person, meal: s.meal, name_en: s.name_en, note: s.note, start_after });
         }
     const mealCosts = items.filter((i) => i.meal).map((i) => i.cost_per_person).sort((a, b) => a - b);
     const typical = mealCosts[Math.floor(mealCosts.length / 2)] ?? 20;

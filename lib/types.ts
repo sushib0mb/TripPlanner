@@ -51,9 +51,15 @@ export interface LocalCosts {
 
 export type Meal = "lunch" | "dinner";
 
+// how start_after is meant: "fixed" is a commitment (a booked tour, a pinned time) and arriving late misses it;
+// "not_before" only holds the visit until then (an opening time, a meal), so arriving later is fine.
+// undefined means fixed, which is how the agent-written plans and saved samples use it
+export type StartKind = "fixed" | "not_before";
+
 export interface DraftStop {
     place_id: string;
     start_after?: string;
+    start_kind?: StartKind;
     duration_min: number;
     cost_per_person: number;
     meal?: Meal;
@@ -144,6 +150,9 @@ export interface Leg {
 }
 
 export interface TimedStop {
+    // position of this stop in its draft day, the stable way to point at one stop: a meal break held at a
+    // sight shares the sight's place id
+    index: number;
     placeId: string;
     name: string;
     arriveMin: number;
@@ -161,10 +170,32 @@ export interface TimedDay {
     legs: Leg[];
 }
 
+export type IssueCode =
+    | "unknown_hotel"
+    | "unknown_place"
+    | "date_out_of_range"
+    | "missed_start"
+    | "closed"
+    | "misses_flight"
+    | "day_too_short"
+    | "day_too_long"
+    | "no_dinner"
+    | "dinner_time"
+    | "lunch_time"
+    | "over_budget"
+    | "no_transit"
+    | "transit_fallback"
+    | "lookup_failed"
+    | "split_area"
+    | "travel_heavy"
+    | "timetable_borrowed";
+
 export interface Issue {
     level: "error" | "warning";
-    code: string;
+    code: IssueCode;
     day?: string;
+    // the stop the issue is about, so fixes never have to find it by name
+    placeId?: string;
     message: string;
 }
 
@@ -174,6 +205,14 @@ export interface Evaluation {
     totals: { activities: number; transport: number; car: number; total: number; budget: number };
     timezone: string;
     transitCalls: number;
+}
+
+// the plan on screen plus the traveler's change request, for a replan
+export interface Prior {
+    registry: Registry;
+    draft: Draft;
+    evaluation: Evaluation;
+    instruction: string;
 }
 
 export type StreamEvent =

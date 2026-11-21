@@ -1,9 +1,20 @@
 import OpeningHours from "opening_hours";
 
-// opening_hours reads local date fields, so build a date whose fields match destination time
+// opening_hours reads a Date's local fields (weekday, hour, minute), so times are passed as dates whose local
+// fields spell the destination's wall-clock time. the server's own timezone then only matters if we do
+// arithmetic on timestamps, which jumps an hour across the server's daylight saving changes; so minutes are
+// always read back from the fields, never from timestamp differences
+
 function at(date: string, minute: number) {
     const [y, m, d] = date.split("-").map(Number);
     return new Date(y, m - 1, d, 0, minute);
+}
+
+// minutes after midnight of `date` from a date's local fields, counting whole days past it
+function minutesOf(base: string, d: Date) {
+    const [y, m, day] = base.split("-").map(Number);
+    const days = Math.round((Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) - Date.UTC(y, m - 1, day)) / 86400000);
+    return days * 1440 + d.getHours() * 60 + d.getMinutes();
 }
 
 function parse(oh: string | undefined) {
@@ -34,9 +45,7 @@ export function openIntervals(oh: string | undefined, date: string, from: number
     const parsed = parse(oh);
     if (!parsed) return null;
     try {
-        const base = at(date, 0).getTime();
-        const min = (d: Date) => Math.round((d.getTime() - base) / 60000);
-        return parsed.getOpenIntervals(at(date, from), at(date, to)).map(([s, e]) => [min(s), min(e)]);
+        return parsed.getOpenIntervals(at(date, from), at(date, to)).map(([s, e]) => [minutesOf(date, s), minutesOf(date, e)]);
     } catch {
         return null;
     }

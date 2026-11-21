@@ -1,4 +1,5 @@
 import tzlookup from "tz-lookup";
+import { haversineKm } from "./distance";
 import { cachedJson } from "./http";
 import { nearbyStop } from "./routing";
 import type { Place } from "./types";
@@ -99,13 +100,7 @@ export async function findAirport(query: string, near: LatLon): Promise<Place | 
     return stop ? { ...airport, name: `${airport.name} (${stop.name})`, lat: stop.lat, lon: stop.lon } : airport;
 }
 
-export function haversineKm(a: { lat: number; lon: number }, b: { lat: number; lon: number }) {
-    const r = 6371;
-    const dLat = ((b.lat - a.lat) * Math.PI) / 180;
-    const dLon = ((b.lon - a.lon) * Math.PI) / 180;
-    const x = Math.sin(dLat / 2) ** 2 + Math.cos((a.lat * Math.PI) / 180) * Math.cos((b.lat * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
-    return 2 * r * Math.asin(Math.sqrt(x));
-}
+export { haversineKm };
 
 export function timezoneAt(p: { lat: number; lon: number }): string {
     return tzlookup(p.lat, p.lon);

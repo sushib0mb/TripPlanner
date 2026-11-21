@@ -1,6 +1,6 @@
-import { verify } from "@/lib/planner";
 import { schedule, shortlistFromDraft } from "@/lib/scheduler";
 import type { Draft, Intake, Registry } from "@/lib/types";
+import { verify } from "@/lib/verify";
 
 // dev only: rearranges the plan on screen with the scheduler and checks it with real transit, no claude call
 export async function POST(req: Request) {
@@ -8,6 +8,6 @@ export async function POST(req: Request) {
     const { intake, draft, registry } = (await req.json()) as { intake: Intake; draft: Draft; registry: Registry };
     const list = shortlistFromDraft(draft, registry);
     const scheduled = await schedule(intake, list, registry);
-    const final = await verify(intake, list, scheduled.draft, registry, () => {});
+    const final = await verify(intake, list, scheduled.draft, registry, { signal: req.signal });
     return Response.json({ draft: final.draft, evaluation: final.evaluation, report: scheduled.report, adjustments: final.adjustments });
 }

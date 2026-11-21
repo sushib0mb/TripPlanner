@@ -5,14 +5,53 @@ import { DINNER, PACE_DAY } from "./rules";
 import { findAirport, geocode, searchPlaces } from "./geo";
 import { stopNames } from "./names";
 import { addDays, minToHhmm } from "./time";
-import type { Draft, Evaluation, Intake, Place, Registry, StreamEvent } from "./types";
+import type { Draft, Evaluation, Intake, Place, Prior, Registry, StreamEvent } from "./types";
 
-const MODEL = "claude-opus-5-5";
+// the model and its effort can be changed without a code change, e.g. to compare cost and quality
+// PLANNER_MODEL=claude-sonnet-5-5 or PLANNER_EFFORT=medium in .env.local
+const EFFORTS = ["low", "medium", "high", "xhigh", "max"] as const;
+type Effort = (typeof EFFORTS)[number];
+export const MODEL = process.env.PLANNER_MODEL?.trim() || "claude-opus-5-5";
+export const EFFORT: Effort = EFFORTS.find((e) => e === process.env.PLANNER_EFFORT?.trim()) ?? "low";
 const MAX_SUBMISSIONS = 4;
 const MAX_TURNS = 30;
 
 // created on first use so the app still loads without a key
 let client: Anthropic | undefined;
+
+// $ per million tokens, for the cost line in the log; models not listed only get token counts.
+// cache writes are the 5 minute kind, 1.25x input
+const PRICES: Record<string, { input: number; output: number; cacheRead: number }> = {
+    "claude-opus-5-5": { input: 4, output: 20, cacheRead: 0.2 },
+    "claude-sonnet-5-5": { input: 2, output: 10, cacheRead: 0.1 },
+};
+
+// token use over a whole run, so runs can be compared when the model, effort or prompts change
+export class UsageTotals {
+    input = 0;
+    output = 0;
+    cacheRead = 0;
+    cacheWrite = 0;
+    searches = 0;
+    turns = 0;
+    add(u: Anthropic.Beta.BetaUsage) {
+        this.turns++;
+        this.input += u.input_tokens;
+        this.output += u.output_tokens;
+        this.cacheRead += u.cache_read_input_tokens ?? 0;
+        this.cacheWrite += u.cache_creation_input_tokens ?? 0;
+        this.searches += u.server_tool_use?.web_search_requests ?? 0;
+    }
+    summary(model = MODEL) {
+        const p = PRICES[model];
+        const cost = p && (this.input * p.input + this.cacheWrite * p.input * 1.25 + this.cacheRead * p.cacheRead + this.output * p.output) / 1e6;
+        const k = (n: number) => `${(n / 1000).toFixed(1)}k`;
+        return (
+            `run total (${model}, effort ${EFFORT}): ${this.turns} turns, ${k(this.input)} in, ${k(this.cacheRead)} cached, ${k(this.cacheWrite)} cache write, ` +
+            `${k(this.output)} out${this.searches ? `, ${this.searches} web searches` : ""}${cost !== undefined ? `, about $${cost.toFixed(2)} in tokens` : ""}`
+        );
+    }
+}
 
 // built from the checker's own numbers so the prompt and the checks never disagree
 const paceLines = (Object.keys(PACE_DAY) as (keyof typeof PACE_DAY)[])
@@ -141,6 +180,18 @@ export function placeLine(p: Place) {
     return `${p.id} | ${p.name} | ${p.kind}${hints ? ` (${hints})` : ""}${p.area ? ` | area: ${p.area}` : ""} | ${p.lat.toFixed(4)},${p.lon.toFixed(4)}${p.openingHours ? ` | hours: ${p.openingHours}` : ""}`;
 }
 
+// the places listed in the first message. a replan lists only the destination, the airports and the plan's own
+// places: after a run the registry holds every search result, often a hundred or more, and they would be
+// re-sent on every turn. the rest stay usable by id
+export function knownPlaces(registry: Registry, plan?: Draft) {
+    const all = Object.values(registry);
+    if (!plan) return all.map(placeLine).join("\n");
+    const keep = new Set(["ARR", "DEP", plan.hotel_place_id, ...plan.days.flatMap((d) => d.stops.map((s) => s.place_id))]);
+    // the destination itself was found first, search_places and geocode bias toward it
+    if (all[0]) keep.add(all[0].id);
+    return all.filter((p) => keep.has(p.id)).map(placeLine).join("\n");
+}
+
 export function describeEvaluation(ev: Evaluation, registry: Registry) {
     const shown = stopNames(ev.days);
     const name = (id: string) => shown.get(id) ?? registry[id]?.name ?? id;
@@ -194,14 +245,16 @@ export async function prepareRegistry(intake: Intake, log: (m: string) => void):
 export async function runAgent(
     intake: Intake,
     emit: (e: StreamEvent) => void,
-    prior?: { registry: Registry; draft: Draft; evaluation: Evaluation; instruction: string },
+    prior?: Prior,
+    signal?: AbortSignal,
 ) {
     const log = (msg: string) => emit({ type: "log", msg });
     checkCredentials();
     const registry: Registry = prior ? { ...prior.registry } : await prepareRegistry(intake, log);
     const lastDate = addDays(intake.startDate, intake.nights);
+    const usage = new UsageTotals();
 
-    let userText = `Trip request (dates ${intake.startDate} to ${lastDate}, ${intake.nights} nights):\n${JSON.stringify(intake, null, 2)}\n\nKnown places (id | name | kind | area | lat,lon | hours):\n${Object.values(registry).map(placeLine).join("\n")}`;
+    let userText = `Trip request (dates ${intake.startDate} to ${lastDate}, ${intake.nights} nights):\n${JSON.stringify(intake, null, 2)}\n\nKnown places (id | name | kind | area | lat,lon | hours):\n${knownPlaces(registry, prior?.draft)}`;
     if (prior) {
         userText += `\n\nCurrent plan:\n${JSON.stringify(prior.draft)}\n\nIts check result:\n${describeEvaluation(prior.evaluation, registry)}\n\nThe traveler asks for this change: ${prior.instruction}\nChange only what the request needs, then submit the full plan.`;
     } else {
@@ -213,7 +266,8 @@ export async function runAgent(
     let submissions = 0;
 
     for (let turn = 0; turn < MAX_TURNS; turn++) {
-        const message = await callModel(SYSTEM, TOOLS, messages);
+        const message = await callModel(SYSTEM, TOOLS, messages, signal);
+        usage.add(message.usage);
 
         if (message.stop_reason === "refusal") throw new Error("the model declined this request");
         messages.push({ role: "assistant", content: message.content });
@@ -225,7 +279,7 @@ export async function runAgent(
 
         const results: Anthropic.Beta.BetaToolResultBlockParam[] = [];
         for (const call of calls) {
-            const result = await runTool(call, intake, registry, log, () => submissions, (d, ev) => {
+            const result = await runTool(call, intake, registry, log, signal, () => submissions, (d, ev) => {
                 submissions++;
                 if (!best || score(ev) <= score(best.evaluation)) best = { draft: d, evaluation: ev };
             });
@@ -238,23 +292,29 @@ export async function runAgent(
         }
     }
 
+    log(usage.summary());
     if (!best) throw new Error("the agent never submitted a plan");
     emit({ type: "result", draft: best.draft, evaluation: best.evaluation, registry });
 }
 
-export async function callModel(system: string, tools: Anthropic.Beta.BetaToolUnion[], messages: Anthropic.Beta.BetaMessageParam[]) {
+export async function callModel(system: string, tools: Anthropic.Beta.BetaToolUnion[], messages: Anthropic.Beta.BetaMessageParam[], signal?: AbortSignal) {
+    signal?.throwIfAborted();
     client ??= new Anthropic();
-    const stream = client.beta.messages.stream({
-        model: MODEL,
-        max_tokens: 64000,
-        betas: ["server-side-fallback-2026-07-01"],
-        fallbacks: "default",
-        output_config: { effort: "medium" },
-        cache_control: { type: "ephemeral" },
-        system,
-        tools,
-        messages,
-    });
+    const stream = client.beta.messages.stream(
+        {
+            model: MODEL,
+            max_tokens: 64000,
+            betas: ["server-side-fallback-2026-07-01"],
+            fallbacks: "default",
+            output_config: { effort: EFFORT },
+            cache_control: { type: "ephemeral" },
+            system,
+            tools,
+            messages,
+        },
+        // a traveler who closes the page stops the run instead of paying for it
+        { signal },
+    );
     return stream.finalMessage().catch((e: unknown) => {
         // surface the api's own message instead of the raw json body
         if (e instanceof Anthropic.APIError) {
@@ -304,6 +364,7 @@ async function runTool(
     intake: Intake,
     registry: Registry,
     log: (m: string) => void,
+    signal: AbortSignal | undefined,
     submissions: () => number,
     onPlan: (d: Draft, ev: Evaluation) => void,
 ): Promise<{ text: string; error: boolean }> {
@@ -314,13 +375,15 @@ async function runTool(
             if (submissions() >= MAX_SUBMISSIONS) return { text: "No more submissions are allowed. Write your summary for the traveler now.", error: true };
             const draft = DraftSchema.parse(call.input) as Draft;
             log(`checking submission ${submissions() + 1}`);
-            const ev = await evaluatePlan(intake, draft, registry, log);
+            const ev = await evaluatePlan(intake, draft, registry, { log, signal });
             onPlan(draft, ev);
             const left = MAX_SUBMISSIONS - submissions();
             return { text: `${describeEvaluation(ev, registry)}\n\nsubmissions left: ${left}`, error: false };
         }
         return { text: `unknown tool ${call.name}`, error: true };
     } catch (e) {
+        // a cancelled run stops here instead of telling the model about it
+        if (signal?.aborted) throw e;
         const msg = e instanceof z.ZodError ? `invalid input: ${e.message}` : e instanceof Error ? e.message : String(e);
         log(`${call.name} failed: ${msg}`);
         return { text: msg, error: true };
