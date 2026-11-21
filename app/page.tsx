@@ -42,6 +42,8 @@ export default function Home() {
     const [log, setLog] = useState<string[]>([]);
     const [busy, setBusy] = useState(false);
     const [instruction, setInstruction] = useState("");
+    // the new flow where a scheduler arranges the agent's picks, or the older one where the agent writes every day
+    const [planner, setPlanner] = useState<"scheduler" | "agent">("scheduler");
 
     // reads the agent's newline-delimited json event stream
     async function streamPlan(body: object) {
@@ -99,6 +101,21 @@ export default function Home() {
             .finally(() => setBusy(false));
     }
 
+    // dev only: rearranges the plan on screen with the scheduler and real transit, no claude call
+    function reschedule() {
+        if (!plan) return;
+        setBusy(true);
+        setLog((l) => [...l, "dev: rescheduling the plan on screen, no claude call"]);
+        fetch("/api/dev/reschedule", { method: "POST", body: JSON.stringify({ intake, draft: plan.draft, registry: plan.registry }) })
+            .then((r) => r.json())
+            .then((d: { draft: Draft; evaluation: Evaluation; report: string; adjustments: string[] }) => {
+                setPlan({ ...plan, draft: d.draft, evaluation: d.evaluation });
+                setLog((l) => [...l, d.report, ...d.adjustments]);
+            })
+            .catch((e: Error) => setLog((l) => [...l, "error: " + e.message]))
+            .finally(() => setBusy(false));
+    }
+
     // dev only: keeps the plan on screen as a sample file, named after the destination
     function saveSample() {
         if (!plan) return;
@@ -112,7 +129,16 @@ export default function Home() {
     return (
         <main>
             <h1>trip planner</h1>
-            <TripForm intake={intake} busy={busy} onChange={setIntake} onSubmit={() => run({ intake })} />
+            <TripForm intake={intake} busy={busy} onChange={setIntake} onSubmit={() => run({ intake, planner })} />
+            {process.env.NODE_ENV === "development" && (
+                <label>
+                    dev: planner{" "}
+                    <select value={planner} onChange={(e) => setPlanner(e.target.value as "scheduler" | "agent")}>
+                        <option value="scheduler">agent picks, scheduler arranges</option>
+                        <option value="agent">agent writes every day (old)</option>
+                    </select>{" "}
+                </label>
+            )}
             {process.env.NODE_ENV === "development" &&
                 SAMPLES.map((s) => (
                     <button key={s.name} type="button" disabled={busy} onClick={() => loadSample(s)}>
@@ -120,9 +146,14 @@ export default function Home() {
                     </button>
                 ))}
             {process.env.NODE_ENV === "development" && plan && (
-                <button type="button" disabled={busy} onClick={saveSample}>
-                    dev: save as sample
-                </button>
+                <>
+                    <button type="button" disabled={busy} onClick={reschedule}>
+                        dev: reschedule
+                    </button>
+                    <button type="button" disabled={busy} onClick={saveSample}>
+                        dev: save as sample
+                    </button>
+                </>
             )}
 
             {log.length > 0 && (
@@ -139,7 +170,7 @@ export default function Home() {
                     <form
                         onSubmit={(e) => {
                             e.preventDefault();
-                            if (instruction.trim()) run({ intake, prior: { ...plan, instruction } });
+                            if (instruction.trim()) run({ intake, planner, prior: { ...plan, instruction } });
                         }}
                     >
                         <input
@@ -152,7 +183,7 @@ export default function Home() {
                             replan
                         </button>
                     </form>
-                    <Itinerary evaluation={plan.evaluation} registry={plan.registry} currency={intake.currency} busy={busy} onRemove={removeStop} />
+                    <Itinerary reasons={Object.fromEntries(plan.draft.days.map((d) => [d.date, d.reason ?? ""]))} evaluation={plan.evaluation} registry={plan.registry} currency={intake.currency} busy={busy} onRemove={removeStop} />
                 </>
             )}
         </main>

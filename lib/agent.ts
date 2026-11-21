@@ -1,7 +1,9 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
-import { DINNER, evaluatePlan, PACE_DAY } from "./checker";
+import { evaluatePlan } from "./checker";
+import { DINNER, PACE_DAY } from "./rules";
 import { findAirport, geocode, searchPlaces } from "./geo";
+import { stopNames } from "./names";
 import { addDays, minToHhmm } from "./time";
 import type { Draft, Evaluation, Intake, Place, Registry, StreamEvent } from "./types";
 
@@ -134,12 +136,13 @@ const TOOLS: Anthropic.Beta.BetaTool[] = [
     },
 ];
 
-function placeLine(p: Place) {
-    return `${p.id} | ${p.name} | ${p.kind}${p.area ? ` | area: ${p.area}` : ""} | ${p.lat.toFixed(4)},${p.lon.toFixed(4)}${p.openingHours ? ` | hours: ${p.openingHours}` : ""}`;
+export function placeLine(p: Place) {
+    const hints = [p.cuisine && `cuisine: ${p.cuisine}`, p.website && "website", p.notable && "notable"].filter(Boolean).join(", ");
+    return `${p.id} | ${p.name} | ${p.kind}${hints ? ` (${hints})` : ""}${p.area ? ` | area: ${p.area}` : ""} | ${p.lat.toFixed(4)},${p.lon.toFixed(4)}${p.openingHours ? ` | hours: ${p.openingHours}` : ""}`;
 }
 
 export function describeEvaluation(ev: Evaluation, registry: Registry) {
-    const shown = new Map(ev.days.flatMap((d) => d.stops.map((s) => [s.placeId, s.name] as const)));
+    const shown = stopNames(ev.days);
     const name = (id: string) => shown.get(id) ?? registry[id]?.name ?? id;
     const lines: string[] = [];
     const errors = ev.issues.filter((i) => i.level === "error");
@@ -162,7 +165,7 @@ export function describeEvaluation(ev: Evaluation, registry: Registry) {
     return lines.join("\n");
 }
 
-function score(ev: Evaluation) {
+export function score(ev: Evaluation) {
     return ev.issues.filter((i) => i.level === "error").length * 100 + ev.issues.length;
 }
 
@@ -194,9 +197,7 @@ export async function runAgent(
     prior?: { registry: Registry; draft: Draft; evaluation: Evaluation; instruction: string },
 ) {
     const log = (msg: string) => emit({ type: "log", msg });
-    if (!process.env.ANTHROPIC_API_KEY && !process.env.ANTHROPIC_AUTH_TOKEN) {
-        throw new Error("no Claude credentials: put ANTHROPIC_API_KEY=... in trip-planner/.env.local and restart the server");
-    }
+    checkCredentials();
     const registry: Registry = prior ? { ...prior.registry } : await prepareRegistry(intake, log);
     const lastDate = addDays(intake.startDate, intake.nights);
 
@@ -212,26 +213,7 @@ export async function runAgent(
     let submissions = 0;
 
     for (let turn = 0; turn < MAX_TURNS; turn++) {
-        client ??= new Anthropic();
-        const stream = client.beta.messages.stream({
-            model: MODEL,
-            max_tokens: 64000,
-            betas: ["server-side-fallback-2026-07-01"],
-            fallbacks: "default",
-            output_config: { effort: "medium" },
-            cache_control: { type: "ephemeral" },
-            system: SYSTEM,
-            tools: TOOLS,
-            messages,
-        });
-        const message = await stream.finalMessage().catch((e: unknown) => {
-            // surface the api's own message instead of the raw json body
-            if (e instanceof Anthropic.APIError) {
-                const body = e.error as { error?: { message?: string } } | undefined;
-                throw new Error(`Claude API ${e.status ?? ""}: ${body?.error?.message ?? e.message}`);
-            }
-            throw e;
-        });
+        const message = await callModel(SYSTEM, TOOLS, messages);
 
         if (message.stop_reason === "refusal") throw new Error("the model declined this request");
         messages.push({ role: "assistant", content: message.content });
@@ -260,6 +242,63 @@ export async function runAgent(
     emit({ type: "result", draft: best.draft, evaluation: best.evaluation, registry });
 }
 
+export async function callModel(system: string, tools: Anthropic.Beta.BetaToolUnion[], messages: Anthropic.Beta.BetaMessageParam[]) {
+    client ??= new Anthropic();
+    const stream = client.beta.messages.stream({
+        model: MODEL,
+        max_tokens: 64000,
+        betas: ["server-side-fallback-2026-07-01"],
+        fallbacks: "default",
+        output_config: { effort: "medium" },
+        cache_control: { type: "ephemeral" },
+        system,
+        tools,
+        messages,
+    });
+    return stream.finalMessage().catch((e: unknown) => {
+        // surface the api's own message instead of the raw json body
+        if (e instanceof Anthropic.APIError) {
+            const body = e.error as { error?: { message?: string } } | undefined;
+            throw new Error(`Claude API ${e.status ?? ""}: ${body?.error?.message ?? e.message}`);
+        }
+        throw e;
+    });
+}
+
+export function checkCredentials() {
+    if (!process.env.ANTHROPIC_API_KEY && !process.env.ANTHROPIC_AUTH_TOKEN) {
+        throw new Error("no Claude credentials: put ANTHROPIC_API_KEY=... in .env.local and restart the server");
+    }
+}
+
+// geocode and search_places, null for any other tool
+export async function runSearch(
+    call: Anthropic.Beta.BetaToolUseBlock,
+    registry: Registry,
+    log: (m: string) => void,
+): Promise<{ text: string; error: boolean } | null> {
+    if (call.name === "geocode") {
+        const input = GeocodeInput.parse(call.input);
+        log(`geocode "${input.query}"`);
+        const center = Object.values(registry)[0];
+        const hits = await geocode(input.query, center);
+        for (const h of hits) registry[h.id] = h;
+        return { text: hits.length ? hits.map(placeLine).join("\n") : "no results", error: false };
+    }
+    if (call.name === "search_places") {
+        const input = SearchInput.parse(call.input);
+        const near = registry[input.near_place_id];
+        if (!near) return { text: `unknown place id ${input.near_place_id}`, error: true };
+        log(`search "${input.keyword}" near ${near.name}`);
+        const hits = await searchPlaces(near, input.keyword, input.radius_m);
+        for (const h of hits) registry[h.id] = h;
+        return { text: hits.length ? hits.map(placeLine).join("\n") : "no results", error: false };
+    }
+    return null;
+}
+
+export const SEARCH_TOOLS = () => TOOLS.filter((t) => t.name !== "submit_plan");
+
 async function runTool(
     call: Anthropic.Beta.BetaToolUseBlock,
     intake: Intake,
@@ -269,23 +308,8 @@ async function runTool(
     onPlan: (d: Draft, ev: Evaluation) => void,
 ): Promise<{ text: string; error: boolean }> {
     try {
-        if (call.name === "geocode") {
-            const input = GeocodeInput.parse(call.input);
-            log(`geocode "${input.query}"`);
-            const center = Object.values(registry)[0];
-            const hits = await geocode(input.query, center);
-            for (const h of hits) registry[h.id] = h;
-            return { text: hits.length ? hits.map(placeLine).join("\n") : "no results", error: false };
-        }
-        if (call.name === "search_places") {
-            const input = SearchInput.parse(call.input);
-            const near = registry[input.near_place_id];
-            if (!near) return { text: `unknown place id ${input.near_place_id}`, error: true };
-            log(`search "${input.keyword}" near ${near.name}`);
-            const hits = await searchPlaces(near, input.keyword, input.radius_m);
-            for (const h of hits) registry[h.id] = h;
-            return { text: hits.length ? hits.map(placeLine).join("\n") : "no results", error: false };
-        }
+        const searched = await runSearch(call, registry, log);
+        if (searched) return searched;
         if (call.name === "submit_plan") {
             if (submissions() >= MAX_SUBMISSIONS) return { text: "No more submissions are allowed. Write your summary for the traveler now.", error: true };
             const draft = DraftSchema.parse(call.input) as Draft;
