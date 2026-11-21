@@ -1,6 +1,7 @@
 "use client";
 
 import { DAY_COLORS, readableText } from "@/lib/colors";
+import { stopNames } from "@/lib/names";
 import { minToHhmm } from "@/lib/time";
 import type { Evaluation, Leg, Registry, Segment, TimedStop } from "@/lib/types";
 
@@ -19,13 +20,15 @@ interface Props {
     currency: string;
     busy: boolean;
     onRemove: (date: string, placeId: string) => void;
+    // the scheduler's one-line reason per day, e.g. "Fenway + Back Bay"
+    reasons?: Record<string, string>;
 }
 
 type Item = { t: number; leg?: Leg; stop?: TimedStop };
 
-export default function Itinerary({ evaluation, registry, currency, busy, onRemove }: Props) {
+export default function Itinerary({ evaluation, registry, currency, busy, onRemove, reasons }: Props) {
     // stops carry the english name, the registry may only have the local one
-    const shown = new Map(evaluation.days.flatMap((d) => d.stops.map((s) => [s.placeId, s.name] as const)));
+    const shown = stopNames(evaluation.days);
     const name = (id: string) => shown.get(id) ?? registry[id]?.name ?? id;
     const t = evaluation.totals;
 
@@ -48,14 +51,16 @@ export default function Itinerary({ evaluation, registry, currency, busy, onRemo
             </p>
 
             {evaluation.days.map((d, di) => {
-                // legs and stops in time order
-                const items: Item[] = [...d.legs.map((leg) => ({ t: leg.departMin, leg })), ...d.stops.map((stop) => ({ t: stop.arriveMin, stop }))];
+                // legs and stops in time order, leaving out moves that stay in one place, like a lunch break at a museum
+                const moves = d.legs.filter((leg) => leg.fromId !== leg.toId);
+                const items: Item[] = [...moves.map((leg) => ({ t: leg.departMin, leg })), ...d.stops.map((stop) => ({ t: stop.arriveMin, stop }))];
                 items.sort((a, b) => a.t - b.t || (a.leg ? -1 : 1));
                 return (
                     <div key={d.date}>
                         <h3 style={{ color: DAY_COLORS[di % DAY_COLORS.length] }}>
                             day {di + 1}, {d.date}
                         </h3>
+                        {reasons?.[d.date] && <p>{reasons[d.date]}</p>}
                         <ul>
                             {items.map((it, n) =>
                                 it.leg ? (

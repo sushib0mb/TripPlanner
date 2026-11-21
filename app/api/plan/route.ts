@@ -1,9 +1,12 @@
 import { runAgent } from "@/lib/agent";
+import { runPlanner } from "@/lib/planner";
 import type { Draft, Evaluation, Intake, Registry, StreamEvent } from "@/lib/types";
 
 interface Body {
     intake: Intake;
     prior?: { registry: Registry; draft: Draft; evaluation: Evaluation; instruction: string };
+    // "scheduler" is the agent picks, scheduler arranges flow; "agent" is the older flow where the agent writes every day
+    planner?: "scheduler" | "agent";
 }
 
 // streams newline-delimited json events while the agent works
@@ -14,7 +17,8 @@ export async function POST(req: Request) {
         async start(controller) {
             const emit = (e: StreamEvent) => controller.enqueue(encoder.encode(JSON.stringify(e) + "\n"));
             try {
-                await runAgent(body.intake, emit, body.prior);
+                const run = body.planner === "agent" ? runAgent : runPlanner;
+                await run(body.intake, emit, body.prior);
             } catch (e) {
                 emit({ type: "error", msg: e instanceof Error ? e.message : String(e) });
             }

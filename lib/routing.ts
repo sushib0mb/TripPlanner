@@ -39,6 +39,16 @@ export async function osrmRoute(profile: "foot" | "car", a: LatLon, b: LatLon): 
     };
 }
 
+// walking minutes between every pair of points in one request, null when the server refuses or fails
+export async function walkMatrix(points: LatLon[]): Promise<number[][] | null> {
+    if (points.length < 2 || points.length > 80) return null;
+    const coords = points.map((p) => `${r5(p.lon)},${r5(p.lat)}`).join(";");
+    const url = `${OSRM.foot.replace("/route/v1/", "/table/v1/")}${coords}?annotations=duration`;
+    const data = await cachedJson<{ code: string; durations?: (number | null)[][] }>(url, { timeoutMs: 45000 }).catch(() => null);
+    if (!data || data.code !== "Ok" || !data.durations) return null;
+    return data.durations.map((row) => row.map((s) => (s === null ? Infinity : s / 60)));
+}
+
 interface MotisPlace {
     name: string;
     lat: number;
@@ -64,8 +74,35 @@ interface MotisLeg {
     legGeometry?: { points: string; precision: number };
 }
 
-// fullwidth digits and letters in feed text, e.g. bus 上２６ becomes 上26
-const nfkc = (s?: string) => s?.normalize("NFKC");
+const LATIN_TEXT = /^[\p{Script=Latin}\p{N}\p{P}\p{S}\s]+$/u;
+
+// fullwidth digits and letters become plain (bus 上２６ to 上26), and fields that hold both languages,
+// like bangkok's "BTS สยาม;BTS Siam", keep only the latin part
+const english = (s?: string) => {
+    const t = s?.normalize("NFKC");
+    if (!t?.includes(";")) return t;
+    const latin = t
+        .split(";")
+        .map((x) => x.trim())
+        .filter((x) => x && LATIN_TEXT.test(x));
+    return latin.length ? latin.join(" / ") : t;
+};
+
+// transitous mode names in words a traveler uses, e.g. bangkok's skytrain comes back as SUBURBAN
+const MODE_WORDS: Record<string, string> = {
+    SUBURBAN: "train",
+    RAIL: "train",
+    REGIONAL_RAIL: "train",
+    REGIONAL_FAST_RAIL: "train",
+    LONG_DISTANCE: "train",
+    HIGHSPEED_RAIL: "train",
+    NIGHT_RAIL: "train",
+    METRO: "subway",
+    SUBWAY: "subway",
+    COACH: "bus",
+    AERIAL_LIFT: "cable car",
+};
+const modeWord = (mode: string) => MODE_WORDS[mode] ?? mode.toLowerCase().replace(/_/g, " ");
 
 // gtfs colors come as bare hex and are often blank
 const hex = (c?: string) => (c && /^[0-9a-f]{6}$/i.test(c) ? `#${c}` : undefined);
@@ -101,15 +138,15 @@ export async function transitRoute(a: LatLon, b: LatLon, departUtc: number): Pro
         // transitous only gives distances for walks, so measure rides along their path
         km += leg.distance !== undefined ? leg.distance / 1000 : pathKm(path);
         segments.push({
-            mode: leg.mode.toLowerCase(),
-            line: walk ? undefined : nfkc(leg.routeLongName || leg.routeShortName || leg.displayName),
-            short: walk ? undefined : nfkc(leg.routeShortName || leg.displayName),
+            mode: walk ? "walk" : modeWord(leg.mode),
+            line: walk ? undefined : english(leg.routeLongName || leg.routeShortName || leg.displayName),
+            short: walk ? undefined : english(leg.routeShortName || leg.displayName),
             color: walk ? undefined : hex(leg.routeColor),
             textColor: walk ? undefined : hex(leg.routeTextColor),
-            agency: leg.agencyName,
-            headsign: nfkc(leg.headsign),
-            from: nfkc(leg.from.name)!,
-            to: nfkc(leg.to.name)!,
+            agency: english(leg.agencyName),
+            headsign: english(leg.headsign),
+            from: english(leg.from.name)!,
+            to: english(leg.to.name)!,
             fromPos: [leg.from.lat, leg.from.lon],
             toPos: [leg.to.lat, leg.to.lon],
             departUtc: Date.parse(leg.startTime),
@@ -125,7 +162,7 @@ export async function transitRoute(a: LatLon, b: LatLon, departUtc: number): Pro
         minutes: (arriveUtc - departUtc) / 60000,
         km,
         geometry,
-        lines: vehicle.map((l) => nfkc(`${l.mode.toLowerCase()} ${l.routeShortName || l.tripShortName || l.displayName || ""}`.trim())!),
+        lines: vehicle.map((l) => `${modeWord(l.mode)} ${english(l.routeShortName || l.tripShortName || l.displayName) ?? ""}`.trim()),
         vehicleLegs: vehicle.length,
         segments,
     };
@@ -207,5 +244,6 @@ export async function nearbyStop(text: string, near: LatLon, maxKm: number): Pro
     const params = new URLSearchParams({ text, type: "STOP", place: `${r5(near.lat)},${r5(near.lon)}`, placeBias: "5", numResults: "5", language: "en" });
     const hits = await cachedJson<{ name: string; lat: number; lon: number }[]>("https://api.transitous.org/api/v1/geocode?" + params);
     const km = (p: LatLon) => Math.hypot(p.lat - near.lat, (p.lon - near.lon) * Math.cos((near.lat * Math.PI) / 180)) * 111;
-    return hits.filter((h) => km(h) <= maxKm).sort((a, b) => km(a) - km(b))[0] ?? null;
+    const stop = hits.filter((h) => km(h) <= maxKm).sort((a, b) => km(a) - km(b))[0];
+    return stop ? { ...stop, name: english(stop.name) ?? stop.name } : null;
 }

@@ -1,18 +1,10 @@
-import OpeningHours from "opening_hours";
 import { haversineKm, localToUtc, timezoneAt } from "./geo";
+import { hoursState } from "./hours";
 import { osrmRoute, transitRoute } from "./routing";
+import { AIRPORT_BEFORE_DEP_MIN, AIRPORT_EXIT_MIN, DINNER, DINNER_IF_AIRPORT_BY, DINNER_IF_HOTEL_BY, PACE_DAY } from "./rules";
 import { addDays, hhmmToMin, minToHhmm } from "./time";
 import type { Draft, Evaluation, Intake, Issue, Leg, Place, Registry, TimedDay, TimedStop } from "./types";
 
-// minutes after midnight: when each day starts and the window for getting back to the hotel
-export const PACE_DAY = {
-    relaxed: { start: 600, backFrom: 1200, backBy: 1290 },
-    normal: { start: 540, backFrom: 1230, backBy: 1320 },
-    packed: { start: 480, backFrom: 1260, backBy: 1380 },
-};
-export const DINNER = { from: 17 * 60 + 30, to: 21 * 60 + 30 };
-const AIRPORT_EXIT_MIN = 45;
-const AIRPORT_BEFORE_DEP_MIN = 120;
 const MAX_WAIT_MIN = 60;
 const MAX_FALLBACK_WALK_MIN = 60;
 // agencies publish timetables only a few weeks ahead (the mbta's ended 25 days out), so later
@@ -38,7 +30,8 @@ const MAX_SPLIT_WARNINGS = 4;
 const TRAVEL_SHARE = 0.3;
 
 // warnings only: a split can be deliberate, e.g. a museum that is open late on one day
-function groupingWarnings(days: TimedDay[], registry: Registry): Issue[] {
+function groupingWarnings(days: TimedDay[], registry: Registry, keepApart: string[][] = []): Issue[] {
+    const apart = (a: string, b: string) => keepApart.some((g) => g.includes(a) && g.includes(b));
     const issues: Issue[] = [];
     // meals left out, there is a restaurant near something on most days
     const sights = days.flatMap((d) => d.stops.filter((s) => !s.meal && registry[s.placeId]).map((s) => ({ s, date: d.date, p: registry[s.placeId] })));
@@ -47,7 +40,8 @@ function groupingWarnings(days: TimedDay[], registry: Registry): Issue[] {
         for (let j = i + 1; j < sights.length; j++) {
             const a = sights[i];
             const b = sights[j];
-            if (a.date === b.date || a.p.id === b.p.id) continue;
+            // places the traveler asked to keep apart are split on purpose
+            if (a.date === b.date || a.p.id === b.p.id || apart(a.p.id, b.p.id)) continue;
             const km = haversineKm(a.p, b.p);
             if (km > SPLIT_KM) continue;
             const message = `${a.s.name} (${a.date}) is ${Math.round(km * 1000)} m from ${b.s.name} (${b.date}); visiting them the same day saves a trip`;
@@ -82,18 +76,6 @@ function timetableDate(date: string, today: string) {
     return addDays(date, -7 * Math.ceil((ahead - TIMETABLE_HORIZON_DAYS) / 7));
 }
 
-function hoursState(oh: string | undefined, date: string, minute: number): "open" | "closed" | "unknown" {
-    if (!oh) return "unknown";
-    try {
-        const parsed = new OpeningHours(oh, null);
-        const [y, m, d] = date.split("-").map(Number);
-        // opening_hours reads local date fields, so build a date whose fields match destination time
-        const at = new Date(y, m - 1, d, 0, minute);
-        return parsed.getState(at) ? "open" : "closed";
-    } catch {
-        return "unknown";
-    }
-}
 
 function estimateLeg(from: Place, to: Place, mode: Leg["mode"], tMin: number, note: string): Leg {
     const km = haversineKm(from, to) * 1.3;
@@ -193,7 +175,13 @@ async function routeLeg(ctx: Ctx, from: Place, to: Place, date: string, tMin: nu
     return leg;
 }
 
-export async function evaluatePlan(intake: Intake, draft: Draft, registry: Registry, log: (msg: string) => void = () => {}): Promise<Evaluation> {
+export async function evaluatePlan(
+    intake: Intake,
+    draft: Draft,
+    registry: Registry,
+    log: (msg: string) => void = () => {},
+    keepApart: string[][] = [],
+): Promise<Evaluation> {
     const issues: Issue[] = [];
     const hotel = registry[draft.hotel_place_id];
     const lastDate = addDays(intake.startDate, intake.nights);
@@ -301,7 +289,7 @@ export async function evaluatePlan(intake: Intake, draft: Draft, registry: Regis
         }
 
         // every day with a free evening gets dinner, not a departure day that leaves for the airport first
-        const freeEvening = departing ? latestAtAirport >= 21 * 60 : (hotelAt ?? 0) <= 19 * 60;
+        const freeEvening = departing ? latestAtAirport >= DINNER_IF_AIRPORT_BY : (hotelAt ?? 0) <= DINNER_IF_HOTEL_BY;
         const dinner = stops.find((s) => s.meal === "dinner");
         if (freeEvening && !dinner) {
             issues.push({ level: "error", code: "no_dinner", day: date, message: `no dinner stop; add a restaurant with meal "dinner" starting ${minToHhmm(DINNER.from)}-${minToHhmm(DINNER.to)}` });
@@ -311,7 +299,7 @@ export async function evaluatePlan(intake: Intake, draft: Draft, registry: Regis
         days.push({ date, stops, legs });
     }
 
-    issues.push(...groupingWarnings(days, registry));
+    issues.push(...groupingWarnings(days, registry, keepApart));
 
     if (ctx.borrowed.size) {
         const pairs = [...ctx.borrowed].map(([d, t]) => `${d} uses ${t}`).join(", ");

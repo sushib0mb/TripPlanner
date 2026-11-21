@@ -15,6 +15,7 @@ interface NominatimHit {
     extratags?: Record<string, string> | null;
     namedetails?: Record<string, string> | null;
     address?: Record<string, string> | null;
+    boundingbox?: string[];
 }
 
 // boston and paris put the useful part in suburb (back bay, 3rd arrondissement), tokyo in quarter (asakusa)
@@ -49,6 +50,10 @@ function toPlace(h: NominatimHit): Place {
         kind: `${h.category}=${h.type}`,
         openingHours: h.extratags?.opening_hours,
         area: areaOf(h),
+        bbox: h.boundingbox?.length === 4 ? (h.boundingbox.map(Number) as [number, number, number, number]) : undefined,
+        cuisine: h.extratags?.cuisine?.replace(/_/g, " ").replace(/;/g, ", "),
+        website: !!(h.extratags?.website || h.extratags?.["contact:website"]),
+        notable: !!(h.extratags?.wikidata || h.extratags?.wikipedia),
         source: "nominatim",
     };
 }

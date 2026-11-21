@@ -4,6 +4,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import { LngLatBounds, Map as MapLibre, NavigationControl, Popup, setWorkerUrl, type GeoJSONSource, type MapLayerMouseEvent } from "maplibre-gl";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { DAY_COLORS, readableText } from "@/lib/colors";
+import { stopNames } from "@/lib/names";
 import { minToHhmm } from "@/lib/time";
 import type { Evaluation, Registry, Segment } from "@/lib/types";
 
@@ -86,7 +87,7 @@ function buildData(evaluation: Evaluation, registry: Registry, hotelId: string, 
     const features: GeoJSON.Feature[] = [];
     const coords: Pos[] = [];
     const single = selected !== null;
-    const shown = new Map(evaluation.days.flatMap((d) => d.stops.map((s) => [s.placeId, s.name] as const)));
+    const shown = stopNames(evaluation.days);
     const name = (id: string) => shown.get(id) ?? registry[id]?.name ?? "";
     // a small sideways shift in the day view keeps out and back legs on the same track apart
     const offset = single ? 2.5 : 0;
